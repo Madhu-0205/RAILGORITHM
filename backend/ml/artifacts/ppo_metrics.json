@@ -1,0 +1,309 @@
+{
+  "trained": true,
+  "status": "TRAINED_AND_EVALUATED",
+  "model_version": "ppo-candidate-ranker-1.0.0",
+  "trained_at": "2026-11-22T04:33:26.547374+00:00",
+  "training_data": "Synthetic scenarios only; no real railway data.",
+  "observation_space": "10 global features + 28 features per candidate",
+  "action_space": "Select one of K independently validated candidate actions",
+  "reward_design": "Normalised improvement in weighted delay plus residual-conflict penalty relative to the no-intervention candidate, minus a small step cost.",
+  "global_feature_names": [
+    "sim_time_fraction",
+    "active_trains_scaled",
+    "total_projected_delay_scaled",
+    "max_projected_delay_scaled",
+    "conflict_count_scaled",
+    "primary_severity_scaled",
+    "block_occupancy_fraction",
+    "platform_occupancy_fraction",
+    "completion_fraction",
+    "horizon_fraction"
+  ],
+  "candidate_feature_names": [
+    "action_hold",
+    "action_precedence",
+    "action_platform_reassign",
+    "action_schedule",
+    "action_do_nothing",
+    "hold_min_scaled",
+    "has_hold",
+    "target_priority_scaled",
+    "target_delay_scaled",
+    "target_projected_delay_scaled",
+    "target_is_express",
+    "target_is_freight",
+    "target_at_station",
+    "target_remaining_legs_scaled",
+    "target_max_hold_scaled",
+    "conflict_single_line_crossing",
+    "conflict_headway",
+    "conflict_platform_capacity",
+    "conflict_junction_conflict",
+    "conflict_block_closure",
+    "conflict_delay_risk",
+    "conflict_severity_scaled",
+    "conflict_train_count_scaled",
+    "conflict_headway_scaled",
+    "conflict_platform_capacity_scaled",
+    "conflict_closure_flag",
+    "source_cp_sat",
+    "schedule_hold_count_scaled"
+  ],
+  "training_config": {
+    "iterations": 24,
+    "episodes_per_iteration": 32,
+    "steps_per_episode": 4,
+    "step_minutes": 15,
+    "ppo_epochs": 5,
+    "minibatch": 64,
+    "learning_rate": 0.0003,
+    "gamma": 0.95,
+    "clip": 0.2,
+    "entropy_coef": 0.01,
+    "value_coef": 0.5,
+    "seed": 20261121,
+    "train_scenarios": [
+      "normal_traffic",
+      "evening_peak",
+      "single_line_meet",
+      "delayed_express",
+      "block_closure",
+      "platform_outage",
+      "priority_train"
+    ],
+    "train_seeds": "1000 + iteration*100 + episode"
+  },
+  "episodes": 768,
+  "transitions": 2824,
+  "training_seconds": 100.8,
+  "history": [
+    {
+      "iteration": 1,
+      "transitions": 119,
+      "policy_loss": -0.007805,
+      "value_loss": 0.151183,
+      "entropy": 1.951938,
+      "batches": 10
+    },
+    {
+      "iteration": 2,
+      "transitions": 119,
+      "policy_loss": -0.001982,
+      "value_loss": 0.067129,
+      "entropy": 1.930447,
+      "batches": 10
+    },
+    {
+      "iteration": 3,
+      "transitions": 116,
+      "policy_loss": 0.000213,
+      "value_loss": 0.116545,
+      "entropy": 1.927373,
+      "batches": 10
+    },
+    {
+      "iteration": 4,
+      "transitions": 117,
+      "policy_loss": -0.005811,
+      "value_loss": 0.153007,
+      "entropy": 1.88139,
+      "batches": 10
+    },
+    {
+      "iteration": 5,
+      "transitions": 119,
+      "policy_loss": -0.002553,
+      "value_loss": 0.058519,
+      "entropy": 1.947295,
+      "batches": 10
+    },
+    {
+      "iteration": 6,
+      "transitions": 119,
+      "policy_loss": -0.003816,
+      "value_loss": 0.126746,
+      "entropy": 1.928741,
+      "batches": 10
+    },
+    {
+      "iteration": 7,
+      "transitions": 120,
+      "policy_loss": -0.00178,
+      "value_loss": 0.062471,
+      "entropy": 1.941343,
+      "batches": 10
+    },
+    {
+      "iteration": 8,
+      "transitions": 115,
+      "policy_loss": -0.004828,
+      "value_loss": 0.134131,
+      "entropy": 1.966768,
+      "batches": 10
+    },
+    {
+      "iteration": 9,
+      "transitions": 116,
+      "policy_loss": -0.002648,
+      "value_loss": 0.076854,
+      "entropy": 1.996061,
+      "batches": 10
+    },
+    {
+      "iteration": 10,
+      "transitions": 121,
+      "policy_loss": 0.003017,
+      "value_loss": 0.031585,
+      "entropy": 1.912913,
+      "batches": 10
+    },
+    {
+      "iteration": 11,
+      "transitions": 117,
+      "policy_loss": -0.002462,
+      "value_loss": 0.071362,
+      "entropy": 1.91673,
+      "batches": 10
+    },
+    {
+      "iteration": 12,
+      "transitions": 121,
+      "policy_loss": 0.000229,
+      "value_loss": 0.052031,
+      "entropy": 1.901297,
+      "batches": 10
+    },
+    {
+      "iteration": 13,
+      "transitions": 115,
+      "policy_loss": 0.000537,
+      "value_loss": 0.081279,
+      "entropy": 1.911572,
+      "batches": 10
+    },
+    {
+      "iteration": 14,
+      "transitions": 116,
+      "policy_loss": -0.00556,
+      "value_loss": 0.037666,
+      "entropy": 1.916459,
+      "batches": 10
+    },
+    {
+      "iteration": 15,
+      "transitions": 116,
+      "policy_loss": -0.011119,
+      "value_loss": 0.042285,
+      "entropy": 1.835494,
+      "batches": 10
+    },
+    {
+      "iteration": 16,
+      "transitions": 117,
+      "policy_loss": -0.017331,
+      "value_loss": 0.042572,
+      "entropy": 1.864219,
+      "batches": 10
+    },
+    {
+      "iteration": 17,
+      "transitions": 120,
+      "policy_loss": -0.014648,
+      "value_loss": 0.025693,
+      "entropy": 1.829159,
+      "batches": 10
+    },
+    {
+      "iteration": 18,
+      "transitions": 115,
+      "policy_loss": 0.005283,
+      "value_loss": 0.045209,
+      "entropy": 1.796005,
+      "batches": 10
+    },
+    {
+      "iteration": 19,
+      "transitions": 117,
+      "policy_loss": 0.000374,
+      "value_loss": 0.036533,
+      "entropy": 1.730081,
+      "batches": 10
+    },
+    {
+      "iteration": 20,
+      "transitions": 116,
+      "policy_loss": 0.008583,
+      "value_loss": 0.033432,
+      "entropy": 1.712239,
+      "batches": 10
+    },
+    {
+      "iteration": 21,
+      "transitions": 118,
+      "policy_loss": -0.012624,
+      "value_loss": 0.080958,
+      "entropy": 1.646188,
+      "batches": 10
+    },
+    {
+      "iteration": 22,
+      "transitions": 118,
+      "policy_loss": -0.010986,
+      "value_loss": 0.029432,
+      "entropy": 1.657612,
+      "batches": 10
+    },
+    {
+      "iteration": 23,
+      "transitions": 118,
+      "policy_loss": 0.010131,
+      "value_loss": 0.032206,
+      "entropy": 1.555953,
+      "batches": 10
+    },
+    {
+      "iteration": 24,
+      "transitions": 119,
+      "policy_loss": -0.012526,
+      "value_loss": 0.041163,
+      "entropy": 1.560161,
+      "batches": 10
+    }
+  ],
+  "evaluation": {
+    "decisions": 102,
+    "skipped": 8,
+    "scenarios": [
+      "block_closure",
+      "delayed_express",
+      "evening_peak",
+      "normal_traffic",
+      "platform_outage",
+      "priority_train",
+      "single_line_meet"
+    ],
+    "seeds": [
+      5000,
+      5001,
+      5002,
+      5003
+    ],
+    "policy_top1_matches_measured_best_pct": 55.88,
+    "mean_regret_vs_best": 19.51,
+    "baseline_mean_regret_vs_best": 21.422,
+    "cpsat_mean_regret_vs_best": 31.214,
+    "mean_policy_score": 323.049,
+    "mean_baseline_score": 324.961,
+    "mean_cpsat_score": 161.8,
+    "mean_policy_total_delay_min": 103.98,
+    "mean_policy_residual_conflicts": 4.61,
+    "measurement_note": "All evaluation values are measured on synthetic cloned simulations. Scores are weighted delay plus residual-conflict penalty; lower is better. Regret is the chosen score minus the best measured eligible score at the same state. Mean score fields are descriptive and the CP-SAT mean covers only states where a CP-SAT candidate existed; compare regret instead."
+  },
+  "limitations": [
+    "Trained and evaluated only on synthetic simulation data.",
+    "The policy ranks pre-validated candidates; it cannot create or execute actions.",
+    "Policy probabilities are sampling scores, not calibrated operational confidence.",
+    "Evaluation shares the same scenario families as training with different seeds; this measures stability, not out-of-distribution generalisation.",
+    "Lower scores are better; regret is the comparable metric. Operational decisions remain human."
+  ]
+}
