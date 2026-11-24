@@ -1,0 +1,31 @@
+{
+  "label": "SYNTHETIC_PPO_BENCHMARK",
+  "note": "Evaluation uses the current EVAL_SCENARIOS in backend/ml/train_ppo.py.",
+  "model_version": "ppo-candidate-ranker-1.0.0",
+  "decisions": 48,
+  "skipped": 8,
+  "scenarios": [
+    "delayed_express",
+    "evening_peak",
+    "normal_traffic",
+    "platform_outage",
+    "priority_train",
+    "single_line_meet"
+  ],
+  "seeds": [
+    5000,
+    5001
+  ],
+  "policy_top1_matches_measured_best_pct": 25.0,
+  "mean_regret_vs_best": 21.438,
+  "baseline_mean_regret_vs_best": 10.25,
+  "cpsat_mean_regret_vs_best": 12.917,
+  "mean_policy_score": 300.792,
+  "mean_baseline_score": 289.604,
+  "mean_cpsat_score": 155.417,
+  "mean_policy_total_delay_min": 93.69,
+  "mean_policy_residual_conflicts": 6.83,
+  "measurement_note": "All evaluation values are measured on synthetic cloned simulations. Scores are weighted delay plus residual-conflict penalty; lower is better. Regret is the chosen score minus the best measured eligible score at the same state. Mean score fields are descriptive and the CP-SAT mean covers only states where a CP-SAT candidate existed; compare regret instead.",
+  "generated_at": "2026-11-24T12:31:41.971197+00:00",
+  "label_name": "baseline-v1"
+}
