@@ -1,8 +1,32 @@
-# RAILGORITHM 2.6 — Railway Operational Visualization & Interface Excellence
+# RAILGORITHM 2.7 — Section Controller Control Office Redesign
 
 AI-assisted railway traffic monitoring, scheduling, and **human decision support** on a realistic, modular network. The system ingests and validates real-time operational telemetry, simulates train movements, detects projected conflicts, generates candidate control actions, checks feasibility with Google OR-Tools CP-SAT, independently validates every candidate against formal hard constraints, ranks them with a trained PPO policy, explains the evidence, and **waits for an authorised human controller or station master to decide**.
 
 > **Advisory-Only Safety Guarantee:** RAILGORITHM is strictly an advisory decision-support system. It is never connected to live signalling interlockings, points, routes, or wayside infrastructure, and cannot execute autonomous control. Every operational recommendation requires explicit human confirmation (`confirm_apply: true`) and written rationale, cryptographically secured in an append-only SHA-256 audit chain.
+
+---
+
+## What's New in Version 2.7
+
+- **Unified Desktop-First Section Controller Control Office Console (`Dashboard.tsx`):**
+  - Transforms the Section Controller experience from isolated, fragmented pages into a single, high-density, professional traffic management console.
+  - **Region A: Operational Control Header Bar:** Section Controller identity (`SC-402`), shift indicator (`Day Shift 06:00–14:00`), control territory selector dropdown (`NDL-VSN Mainline Corridor`, `MLG Suburban Branch Loop`, `KRN-SRP Quad Freight Bypass`), synchronized wall-clock IST and simulated operating clocks, real-time telemetry health indicator with latency tracking ($4.2\text{ s}$), and unacknowledged critical alerts counter badge.
+  - **Region B: Standardized Operational Summary:** 12 comprehensive operational KPIs: Active Corridor Trains, Average Section Delay, Block Occupancy %, Junction Throat Load (MLG), Corridor Throughput, Delay Propagation Index (DPI), Delayed Trains, Route Conflicts, Recovery Clearance Rate, Running vs Berthed Trains, Active Speed Restrictions (TSR/PSR), and Pending Regulation Decisions.
+  - **Region C: Multi-Station Territory Control Strip (`StationControlStrip.tsx`):** Continuous horizontal operational strip rendering all configured territory stations (`NDL`, `KRN`, `MLG`, `SRP`, `VSN`). Displays per-station train movement volumes (approaching, berthed, departed, delayed), platform berth availability, and caution indicators.
+  - **Inline Station Yard Inspection Console:** 1-click drill-down opening mirrored Electronic Interlocking (`StationWorkingDiagram`), platform slots (`StationPlatformBerths`), and arrival/departure board (`StationTrainBoard`) without leaving Section Controller mode.
+  - **Region D: Master Section Controller Graph Centerpiece (`TimeDistanceGraph.tsx`):** Dynamic station chainage scaling computed directly from network topology ($0.0\text{ km}$ to $60.0\text{ km}$), pan navigation controls (`◀ -30m`, `Center Now ⏱`, `+30m ▶`), multi-duration viewport scaling ($2\text{h}$, $3\text{h}$, $6\text{h}$, $12\text{h}$), train category filtering, forecast trajectory toggles, and single-line bottleneck territory shading (Sections S1 and S3).
+  - **Region E: Operational Attention Panel (`OperationalAttentionPanel.tsx`):** Prioritized severity triage queue (`CRITICAL`, `HIGH`, `MEDIUM`, `INFORMATIONAL`) with rule citations (G&SR Rule 4.16, GR 1.02(62), SEM Part II) and Section Controller acknowledgement tracking.
+- **The 6 Integrated Control Workspaces:**
+  - **Corridor Blocks & Bottlenecks:** Horizontal corridor schematic, block occupancy matrix, throat congestion, and delay distribution charts.
+  - **Section Train Movement & Regulation Ledger (`TrainMovementLedger.tsx`):** Real-time filterable train ledger (Running, At Station, Waiting, Delayed, Stale) with expandable milestone timeline drawer.
+  - **Crossing, Precedence & AI Regulation Workspace (`ConflictRegulationWorkspace.tsx`):** Evaluates candidate CP-SAT and PPO alternatives against statutory constraints with human authorization gates.
+  - **Engineering Restrictions & Operating Incidents (`RestrictionsAndIncidentsPanel.tsx`):** Tracks TSR, PSR, maintenance blocks, and equipment failure incidents.
+  - **Control Office Coordination & Shift Handover Console (`CoordinationAndHandover.tsx`):** Inter-departmental coordination diary (SM, TPC, S&T, P-Way, Loco) and cryptographically signed shift handover briefing.
+- **321 Automated Tests Passing (100% Pass Rate):**
+  - **244 backend tests passed** (`pytest`).
+  - **77 frontend tests passed** across 19 test suites (`vitest`).
+  - Clean TypeScript compilation (`tsc --noEmit`).
+  - Clean production build (`npm run build` in 1.29s).
 
 ---
 

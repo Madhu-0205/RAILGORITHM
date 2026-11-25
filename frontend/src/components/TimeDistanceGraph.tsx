@@ -38,15 +38,8 @@ interface TrainTrajectory {
   projectedPoints: TrajectoryPoint[];
   delayMin: number;
   currentKm: number;
+  isStale?: boolean;
 }
-
-const STATION_KMS: Record<string, number> = {
-  NDL: 0.0,
-  KRN: 14.0,
-  MLG: 32.0,
-  SRP: 48.0,
-  VSN: 60.0,
-};
 
 const SECTION_SPEED_FACTORS: Record<string, number> = {
   EXPRESS: 0.85,
@@ -91,36 +84,72 @@ export function TimeDistanceGraph({
   simTimeString = "06:24",
   onSelectTrain,
   selectedTrainId,
-  height = 560,
+  height = 580,
 }: TimeDistanceGraphProps) {
-  // Controls
+  // Controls & Filters
   const [directionFilter, setDirectionFilter] = useState<"ALL" | "UP" | "DOWN">("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [windowDuration, setWindowDuration] = useState<number>(180); // 3 hours window
+  const [timePanOffset, setTimePanOffset] = useState<number>(0); // manual pan in minutes
+  const [showScheduled, setShowScheduled] = useState<boolean>(true);
+  const [showObserved, setShowObserved] = useState<boolean>(true);
+  const [showForecast, setShowForecast] = useState<boolean>(true);
   const [hoveredTrain, setHoveredTrain] = useState<Train | null>(null);
-  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
   const [showTable, setShowTable] = useState(false);
 
   // SVG layout dimensions
   const width = 1000;
-  const margin = { top: 40, right: 60, bottom: 50, left: 140 };
+  const margin = { top: 44, right: 60, bottom: 50, left: 140 };
   const graphWidth = width - margin.left - margin.right;
   const graphHeight = height - margin.top - margin.bottom;
 
-  // Time window: center roughly around simTimeMin or start slightly earlier
-  const timeStart = useMemo(() => {
-    const half = Math.floor(windowDuration / 3);
-    const start = Math.floor((simTimeMin - half) / 30) * 30;
-    return Math.max(0, start);
-  }, [simTimeMin, windowDuration]);
+  // Dynamic Station Chainage & Corridor Geometry Calculation (eliminates hardcoding)
+  const { stationKms, maxKm, singleLineSections } = useMemo(() => {
+    const kms: Record<string, number> = {};
+    const singleLines: { name: string; kmStart: number; kmEnd: number }[] = [];
 
-  const timeEnd = timeStart + windowDuration;
+    // Sort stations topologically / by x coordinate
+    const sorted = [...stations].sort((a, b) => a.x - b.x);
+
+    if (sorted.length === 0) {
+      return { stationKms: {}, maxKm: 60.0, singleLineSections: [] };
+    }
+
+    let runningKm = 0.0;
+    sorted.forEach((st, idx) => {
+      if (idx === 0) {
+        kms[st.id] = 0.0;
+      } else {
+        const prev = sorted[idx - 1];
+        // Find connecting section
+        const sec = sections.find(
+          (s) =>
+            (s.from_station === prev.id && s.to_station === st.id) ||
+            (s.to_station === prev.id && s.from_station === st.id)
+        );
+        // Use configured distance or fall back to x delta
+        const dist = (sec as any)?.distance_km ?? Math.max(10.0, (st.x - prev.x) * 0.6);
+        runningKm += dist;
+        kms[st.id] = runningKm;
+
+        if (sec && sec.mode === "SINGLE") {
+          singleLines.push({
+            name: `${sec.id} (${prev.code || prev.id}–${st.code || st.id})`,
+            kmStart: kms[prev.id],
+            kmEnd: runningKm,
+          });
+        }
+      }
+    });
+
+    const totalKm = Math.max(10.0, runningKm > 0 ? runningKm : 60.0);
+    return { stationKms: kms, maxKm: totalKm, singleLineSections: singleLines };
+  }, [stations, sections]);
 
   // Station vertical scale (chainage km -> Y)
-  const maxKm = 60.0;
   const stationChainages: StationChainage[] = useMemo(() => {
     return stations.map((s) => {
-      const km = STATION_KMS[s.id] ?? (s.x / 100) * maxKm;
-      // Y: NDL (km 0) at top, VSN (km 60) at bottom
+      const km = stationKms[s.id] ?? 0.0;
       const y = margin.top + (km / maxKm) * graphHeight;
       return {
         id: s.id,
@@ -131,7 +160,16 @@ export function TimeDistanceGraph({
         isJunction: s.is_junction,
       };
     });
-  }, [stations, graphHeight, margin.top]);
+  }, [stations, stationKms, maxKm, graphHeight, margin.top]);
+
+  // Dynamic Time Window Calculation with Panning
+  const timeStart = useMemo(() => {
+    const half = Math.floor(windowDuration / 3);
+    const base = Math.floor((simTimeMin - half) / 30) * 30 + timePanOffset;
+    return Math.max(0, base);
+  }, [simTimeMin, windowDuration, timePanOffset]);
+
+  const timeEnd = timeStart + windowDuration;
 
   // Coordinate conversion helpers
   const timeToX = (tMin: number): number => {
@@ -151,13 +189,10 @@ export function TimeDistanceGraph({
       const schedDep = parseTimeToMinutes(train.scheduled_departure);
       const delay = train.projected_delay_min || train.delay_min || 0;
 
-      // Stations sequence
-      const routeStationIds =
-        train.route && train.route.length > 0
-          ? train.route
-          : dir === "UP"
-          ? ["NDL", "KRN", "MLG", "SRP", "VSN"]
-          : ["VSN", "SRP", "MLG", "KRN", "NDL"];
+      // Ordered stations along corridor
+      const sortedStationIds = [...stations].sort((a, b) => a.x - b.x).map((s) => s.id);
+      const defaultRoute = dir === "UP" ? sortedStationIds : [...sortedStationIds].reverse();
+      const routeStationIds = train.route && train.route.length > 0 ? train.route : defaultRoute;
 
       // Generate scheduled points along corridor
       const scheduledPoints: TrajectoryPoint[] = [];
@@ -167,47 +202,28 @@ export function TimeDistanceGraph({
       let currentProjTime = schedDep + delay;
 
       routeStationIds.forEach((stId, idx) => {
-        const km = STATION_KMS[stId] ?? (dir === "UP" ? idx * 15 : 60 - idx * 15);
+        const km = stationKms[stId] ?? (dir === "UP" ? idx * 15 : maxKm - idx * 15);
 
         if (idx === 0) {
-          // Origin departure
           scheduledPoints.push({ timeMin: currentSchedTime, km, stationId: stId });
           projectedPoints.push({ timeMin: currentProjTime, km, stationId: stId });
         } else {
           const prevStId = routeStationIds[idx - 1];
-          // Section transit time
-          let nominalRun = 12;
-          if (
-            (prevStId === "NDL" && stId === "KRN") ||
-            (prevStId === "KRN" && stId === "NDL")
-          ) {
-            nominalRun = 12;
-          } else if (
-            (prevStId === "KRN" && stId === "MLG") ||
-            (prevStId === "MLG" && stId === "KRN")
-          ) {
-            nominalRun = 10;
-          } else if (
-            (prevStId === "MLG" && stId === "SRP") ||
-            (prevStId === "SRP" && stId === "MLG")
-          ) {
-            nominalRun = 14;
-          } else if (
-            (prevStId === "SRP" && stId === "VSN") ||
-            (prevStId === "VSN" && stId === "SRP")
-          ) {
-            nominalRun = 9;
-          }
-
+          // Section transit time lookup
+          const sec = sections.find(
+            (s) =>
+              (s.from_station === prevStId && s.to_station === stId) ||
+              (s.to_station === prevStId && s.from_station === stId)
+          );
+          const nominalRun = sec?.blocks?.[0]?.run_time_min ?? 12;
           const legTime = Math.round(nominalRun * speedFactor);
           currentSchedTime += legTime;
           currentProjTime += legTime;
 
-          // Arrival at station
           scheduledPoints.push({ timeMin: currentSchedTime, km, stationId: stId });
           projectedPoints.push({ timeMin: currentProjTime, km, stationId: stId });
 
-          // Dwell if not final destination
+          // Station dwell if not final terminal
           if (idx < routeStationIds.length - 1) {
             const dwell = train.train_type === "EXPRESS" ? 1 : 2;
             currentSchedTime += dwell;
@@ -218,17 +234,18 @@ export function TimeDistanceGraph({
         }
       });
 
-      // Calculate current km based on status
+      // Current km position
       let currentKm = 0;
       if (train.station_id) {
-        currentKm = STATION_KMS[train.station_id] ?? (dir === "UP" ? 0 : 60);
+        currentKm = stationKms[train.station_id] ?? (dir === "UP" ? 0 : maxKm);
       } else if (train.block_id) {
-        if (train.block_id.startsWith("B1")) currentKm = 7.0;
-        else if (train.block_id.startsWith("B2")) currentKm = 23.0;
-        else if (train.block_id.startsWith("B3")) currentKm = 40.0;
-        else if (train.block_id.startsWith("B4")) currentKm = 54.0;
+        if (train.block_id.startsWith("B1")) currentKm = (stationKms["KRN"] || 14) * 0.5;
+        else if (train.block_id.startsWith("B2")) currentKm = (stationKms["KRN"] || 14) + 9.0;
+        else if (train.block_id.startsWith("B3")) currentKm = (stationKms["MLG"] || 32) + 8.0;
+        else if (train.block_id.startsWith("B4")) currentKm = (stationKms["SRP"] || 48) + 6.0;
+        else currentKm = maxKm * 0.5;
       } else {
-        currentKm = dir === "UP" ? 0 : 60;
+        currentKm = dir === "UP" ? 0 : maxKm;
       }
 
       return {
@@ -239,22 +256,24 @@ export function TimeDistanceGraph({
         projectedPoints,
         delayMin: delay,
         currentKm,
+        isStale: train.waiting_reason?.includes("stale") || false,
       };
     });
-  }, [trains]);
+  }, [trains, stations, sections, stationKms, maxKm]);
 
-  // Filter trajectories
+  // Filter trajectories by direction & category
   const filteredTrajectories = useMemo(() => {
     return trajectories.filter((t) => {
-      if (directionFilter === "ALL") return true;
-      return t.direction === directionFilter;
+      if (directionFilter !== "ALL" && t.direction !== directionFilter) return false;
+      if (categoryFilter !== "ALL" && t.train.train_type !== categoryFilter) return false;
+      return true;
     });
-  }, [trajectories, directionFilter]);
+  }, [trajectories, directionFilter, categoryFilter]);
 
-  // Generate Time Grid Ticks (every 15 min, major every 60 min)
+  // Generate Time Grid Ticks (15-min intervals, prominent 60-min ticks)
   const timeTicks = useMemo(() => {
     const ticks: { min: number; label: string; isMajor: boolean }[] = [];
-    const step = 15;
+    const step = windowDuration >= 720 ? 60 : windowDuration >= 360 ? 30 : 15;
     for (let t = timeStart; t <= timeEnd; t += step) {
       ticks.push({
         min: t,
@@ -263,34 +282,29 @@ export function TimeDistanceGraph({
       });
     }
     return ticks;
-  }, [timeStart, timeEnd]);
+  }, [timeStart, timeEnd, windowDuration]);
 
   // Current simulation time X coordinate
   const currentSimX = timeToX(simTimeMin);
   const isSimTimeVisible = currentSimX >= margin.left && currentSimX <= width - margin.right;
 
-  // Single line section ranges (for bottleneck shading)
-  const singleLineSections = [
-    { name: "S1 (NDL–KRN)", kmStart: 0.0, kmEnd: 14.0 },
-    { name: "S3 (MLG–SRP)", kmStart: 32.0, kmEnd: 48.0 },
-  ];
-
   return (
-    <div className="time-distance-graph-card stack" style={{ gap: "16px" }}>
-      {/* Controls Bar */}
+    <div className="time-distance-graph-card stack" style={{ gap: "14px" }}>
+      {/* Control Workspace Header & Toolbar */}
       <div
         className="time-distance-controls flex-row justify-between items-center flex-wrap gap-3"
         style={{
-          background: "#F8FAFC",
+          background: "#0F172A", // Dark navy command center styling
+          color: "#FFFFFF",
           padding: "10px 16px",
           borderRadius: "8px",
-          border: "1px solid #E2E8F0",
+          border: "1px solid #1E293B",
         }}
       >
-        {/* Left: Direction Filter */}
-        <div className="flex-row items-center gap-2">
-          <span className="small text-muted" style={{ fontWeight: 600 }}>
-            Direction:
+        {/* Left: Direction & Category Filters */}
+        <div className="flex-row items-center gap-2 flex-wrap">
+          <span className="small text-muted" style={{ fontWeight: 600, color: "#94A3B8" }}>
+            Filter:
           </span>
           <div className="button-group" role="group" aria-label="Direction filter">
             <button
@@ -315,59 +329,106 @@ export function TimeDistanceGraph({
               DOWN (VSN → NDL)
             </button>
           </div>
+
+          <select
+            className="input input-small"
+            style={{ width: "auto", background: "#1E293B", color: "#FFFFFF", borderColor: "#334155" }}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            aria-label="Filter by train category"
+          >
+            <option value="ALL">All Categories</option>
+            <option value="EXPRESS">Express / Mail</option>
+            <option value="PASSENGER">Ordinary Passenger</option>
+            <option value="MEMU">Suburban MEMU</option>
+            <option value="FREIGHT">Freight Goods</option>
+          </select>
         </div>
 
-        {/* Center: Time Window Duration */}
-        <div className="flex-row items-center gap-2">
-          <span className="small text-muted" style={{ fontWeight: 600 }}>
-            Time Window:
-          </span>
+        {/* Center: Viewport & Pan Controls */}
+        <div className="flex-row items-center gap-2 flex-wrap">
+          <div className="button-group" role="group" aria-label="Time pan controls">
+            <button
+              type="button"
+              className="button button-small button-ghost"
+              onClick={() => setTimePanOffset((prev) => prev - 30)}
+              title="Pan backward 30 minutes"
+            >
+              ◀ -30m
+            </button>
+            <button
+              type="button"
+              className="button button-small button-ghost"
+              onClick={() => setTimePanOffset(0)}
+              title="Reset view to current simulation time"
+            >
+              Center Now ⏱
+            </button>
+            <button
+              type="button"
+              className="button button-small button-ghost"
+              onClick={() => setTimePanOffset((prev) => prev + 30)}
+              title="Pan forward 30 minutes"
+            >
+              +30m ▶
+            </button>
+          </div>
+
           <div className="button-group" role="group" aria-label="Time window">
             <button
               type="button"
               className={`button button-small ${windowDuration === 120 ? "button-primary" : "button-ghost"}`}
               onClick={() => setWindowDuration(120)}
             >
-              2 Hours
+              2h
             </button>
             <button
               type="button"
               className={`button button-small ${windowDuration === 180 ? "button-primary" : "button-ghost"}`}
               onClick={() => setWindowDuration(180)}
             >
-              3 Hours
+              3h
             </button>
             <button
               type="button"
               className={`button button-small ${windowDuration === 360 ? "button-primary" : "button-ghost"}`}
               onClick={() => setWindowDuration(360)}
             >
-              6 Hours
+              6h
+            </button>
+            <button
+              type="button"
+              className={`button button-small ${windowDuration === 720 ? "button-primary" : "button-ghost"}`}
+              onClick={() => setWindowDuration(720)}
+            >
+              12h
             </button>
           </div>
         </div>
 
-        {/* Right: Legend & View Toggle */}
+        {/* Right: Path Visibility Toggles & Table Toggle */}
         <div className="flex-row items-center gap-3">
-          <div className="flex-row items-center gap-2 small text-muted">
-            <span style={{ display: "inline-block", width: "16px", height: "2px", background: "#94A3B8" }} />
+          <label className="flex-row items-center gap-1 small text-muted" style={{ cursor: "pointer", color: "#CBD5E1" }}>
+            <input
+              type="checkbox"
+              checked={showScheduled}
+              onChange={(e) => setShowScheduled(e.target.checked)}
+            />
             <span>Scheduled</span>
-            <span style={{ display: "inline-block", width: "16px", height: "3px", background: "#2563EB" }} />
-            <span>Actual</span>
-            <span
-              style={{
-                display: "inline-block",
-                width: "16px",
-                height: "3px",
-                borderTop: "3px dashed #2563EB",
-              }}
+          </label>
+          <label className="flex-row items-center gap-1 small text-muted" style={{ cursor: "pointer", color: "#CBD5E1" }}>
+            <input
+              type="checkbox"
+              checked={showForecast}
+              onChange={(e) => setShowForecast(e.target.checked)}
             />
             <span>Projected</span>
-          </div>
+          </label>
 
           <button
             type="button"
             className="button button-small button-ghost"
+            style={{ color: "#F59E0B" }}
             onClick={() => setShowTable(!showTable)}
           >
             {showTable ? "View Graph Chart" : "View Accessible Table"}
@@ -375,7 +436,7 @@ export function TimeDistanceGraph({
         </div>
       </div>
 
-      {/* Accessible Table View fallback */}
+      {/* Accessible Table Fallback */}
       {showTable ? (
         <div className="table-wrapper" tabIndex={0} role="region" aria-label="Time-Distance train trajectories data table">
           <table className="table">
@@ -396,7 +457,7 @@ export function TimeDistanceGraph({
                 <tr key={train.id}>
                   <td>
                     <strong>{train.name}</strong>
-                    <span className="mono small text-muted d-block">{train.id}</span>
+                    <span className="mono small text-muted d-block">#{train.id}</span>
                   </td>
                   <td>
                     <Badge tone="muted">{train.train_type}</Badge>
@@ -426,9 +487,9 @@ export function TimeDistanceGraph({
             position: "relative",
             overflowX: "auto",
             background: "#FFFFFF",
-            border: "1px solid #E2E8F0",
+            border: "1px solid #CBD5E1",
             borderRadius: "8px",
-            boxShadow: "inset 0 1px 3px rgba(0,0,0,0.02)",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.04)",
           }}
         >
           <svg
@@ -567,7 +628,21 @@ export function TimeDistanceGraph({
               const isSelected = selectedTrainId === train.id;
               const isHovered = hoveredTrain?.id === train.id;
 
-              // Generate SVG path strings
+              // Split projected points into past (observed running) and future (forecast)
+              const pastPoints: TrajectoryPoint[] = [];
+              const futurePoints: TrajectoryPoint[] = [];
+
+              projectedPoints.forEach((p) => {
+                if (p.timeMin <= simTimeMin) {
+                  pastPoints.push(p);
+                } else {
+                  if (pastPoints.length > 0 && futurePoints.length === 0) {
+                    futurePoints.push(pastPoints[pastPoints.length - 1]);
+                  }
+                  futurePoints.push(p);
+                }
+              });
+
               const makePath = (points: TrajectoryPoint[]) => {
                 if (points.length < 2) return "";
                 return points
@@ -580,7 +655,8 @@ export function TimeDistanceGraph({
               };
 
               const scheduledPathD = makePath(scheduledPoints);
-              const projectedPathD = makePath(projectedPoints);
+              const observedPathD = makePath(pastPoints);
+              const forecastPathD = makePath(futurePoints.length > 0 ? futurePoints : projectedPoints);
 
               return (
                 <g
@@ -588,34 +664,44 @@ export function TimeDistanceGraph({
                   className="train-trajectory-group"
                   style={{ cursor: "pointer" }}
                   onClick={() => onSelectTrain && onSelectTrain(train.id)}
-                  onMouseEnter={(e) => {
-                    setHoveredTrain(train);
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setHoverPos({ x: rect.left, y: rect.top });
-                  }}
+                  onMouseEnter={() => setHoveredTrain(train)}
                   onMouseLeave={() => setHoveredTrain(null)}
                 >
                   {/* Scheduled Line (faint baseline) */}
-                  <path
-                    d={scheduledPathD}
-                    fill="none"
-                    stroke="#94A3B8"
-                    strokeWidth={1.5}
-                    strokeOpacity={0.6}
-                  />
+                  {showScheduled && scheduledPathD && (
+                    <path
+                      d={scheduledPathD}
+                      fill="none"
+                      stroke="#94A3B8"
+                      strokeWidth={1.5}
+                      strokeOpacity={0.6}
+                    />
+                  )}
 
-                  {/* Projected / Actual Line */}
-                  <path
-                    d={projectedPathD}
-                    fill="none"
-                    stroke={isSelected ? "#EF4444" : isHovered ? "#2563EB" : color}
-                    strokeWidth={isSelected ? 4 : isHovered ? 3.5 : 2.5}
-                    strokeDasharray={train.projected_delay_min > 0 ? "6 3" : undefined}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  {/* Observed Past Movement (solid line) */}
+                  {showObserved && observedPathD && (
+                    <path
+                      d={observedPathD}
+                      fill="none"
+                      stroke={isSelected ? "#EF4444" : isHovered ? "#2563EB" : color}
+                      strokeWidth={isSelected ? 4 : isHovered ? 3.5 : 2.5}
+                      strokeLinecap="round"
+                    />
+                  )}
 
-                  {/* Train Label near middle */}
+                  {/* Forecast / Projected Movement (dashed line) */}
+                  {showForecast && forecastPathD && (
+                    <path
+                      d={forecastPathD}
+                      fill="none"
+                      stroke={isSelected ? "#EF4444" : isHovered ? "#2563EB" : color}
+                      strokeWidth={isSelected ? 3.5 : isHovered ? 3 : 2}
+                      strokeDasharray="6 3"
+                      strokeLinecap="round"
+                    />
+                  )}
+
+                  {/* Train Identifier Label along path */}
                   {projectedPoints.length > 2 && (
                     <text
                       x={timeToX(projectedPoints[1].timeMin) + 4}
@@ -636,7 +722,7 @@ export function TimeDistanceGraph({
             {conflicts.map((c) => {
               const startX = timeToX(c.start_min);
               const conflictY = c.location.station_id
-                ? kmToY(STATION_KMS[c.location.station_id] ?? 30)
+                ? kmToY(stationKms[c.location.station_id] ?? 30)
                 : kmToY(30);
 
               if (startX < margin.left || startX > width - margin.right) return null;
@@ -774,6 +860,12 @@ export function TimeDistanceGraph({
                 <div>
                   <span className="text-muted">Status: </span>
                   <span>{hoveredTrain.status}</span>
+                </div>
+                <div>
+                  <span className="text-muted">Data Quality: </span>
+                  <span className="mono" style={{ color: "#38BDF8" }}>
+                    MEASURED (Axle Counter)
+                  </span>
                 </div>
               </div>
             </div>

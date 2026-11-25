@@ -199,4 +199,27 @@ describe("TimeDistanceGraph", () => {
     fireEvent.click(trainLabel);
     expect(onSelect).toHaveBeenCalledWith("12625");
   });
+
+  it("supports category filtering and time panning controls", () => {
+    render(
+      <TimeDistanceGraph
+        stations={mockStations}
+        sections={mockSections}
+        trains={mockTrains}
+        conflicts={mockConflicts}
+      />
+    );
+
+    // Filter by Category
+    const catSelect = screen.getByRole("combobox", { name: /Filter by train category/i });
+    fireEvent.change(catSelect, { target: { value: "EXPRESS" } });
+    expect(catSelect).toHaveValue("EXPRESS");
+
+    // Pan buttons
+    const panBackBtn = screen.getByRole("button", { name: /◀ -30m/i });
+    fireEvent.click(panBackBtn);
+
+    const centerBtn = screen.getByRole("button", { name: /Center Now ⏱/i });
+    fireEvent.click(centerBtn);
+  });
 });

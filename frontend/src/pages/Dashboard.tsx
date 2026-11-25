@@ -34,6 +34,12 @@ import { TimeDistanceGraph } from "../components/TimeDistanceGraph";
 import { StationWorkingDiagram } from "../components/StationWorkingDiagram";
 import { BlockOccupancyMatrix } from "../components/BlockOccupancyMatrix";
 import { StationTrainBoard } from "../components/StationTrainBoard";
+import { StationControlStrip } from "../components/StationControlStrip";
+import { OperationalAttentionPanel } from "../components/OperationalAttentionPanel";
+import { TrainMovementLedger } from "../components/TrainMovementLedger";
+import { ConflictRegulationWorkspace } from "../components/ConflictRegulationWorkspace";
+import { RestrictionsAndIncidentsPanel } from "../components/RestrictionsAndIncidentsPanel";
+import { CoordinationAndHandover } from "../components/CoordinationAndHandover";
 import { KPI_REGISTRY } from "../lib/kpiRegistry";
 
 const DEFAULT_STATIONS: Station[] = [
@@ -98,6 +104,12 @@ export function DashboardPage() {
   const [viewMode, setViewMode] = useState<"STATION" | "SECTION">(defaultMode);
   const [stationId, setStationId] = useState<string>(user?.station_id || "MLG");
   const [showDefinitions, setShowDefinitions] = useState(false);
+
+  // Section Controller Redesign state (v2.7)
+  const [selectedTerritory, setSelectedTerritory] = useState("NDL-VSN Mainline Corridor (Southern Division)");
+  const [inspectStationId, setInspectStationId] = useState<string | null>(null);
+  const [activeSectionTab, setActiveSectionTab] = useState<"ALL" | "GRAPH" | "BLOCKS" | "LEDGER" | "REGULATION" | "RESTRICTIONS" | "HANDOVER">("ALL");
+  const [selectedLedgerTrainId, setSelectedLedgerTrainId] = useState<string | null>(null);
 
   // Station Movement Filter
   const [trainFilter, setTrainFilter] = useState<"ALL" | "APPROACHING" | "AT_STATION" | "DELAYED">("ALL");
@@ -209,6 +221,12 @@ export function DashboardPage() {
     ];
   }, [sectionKpiData?.kpis.trains_active, sectionKpiData?.kpis.trains_delayed]);
 
+  const unackCriticalCount = useMemo(() => {
+    return (sectionKpiData?.active_conflicts || []).filter(
+      (c) => c.severity === "CRITICAL" || c.severity === "HIGH"
+    ).length;
+  }, [sectionKpiData?.active_conflicts]);
+
   if (!selectedId)
     return (
       <EmptyState
@@ -230,6 +248,7 @@ export function DashboardPage() {
   const corridorTrains = data.trains || [];
   const corridorConflicts = sectionKpiData?.active_conflicts || data.conflicts || [];
   const currentStation = corridorStations.find((s) => s.id === stationId) || corridorStations[0];
+  const inspectedStation = inspectStationId ? corridorStations.find((s) => s.id === inspectStationId) : null;
 
   return (
     <div className="stack">
@@ -285,10 +304,106 @@ export function DashboardPage() {
             </select>
           )}
 
+          {viewMode === "SECTION" && (
+            <select
+              className="select-small"
+              value={selectedTerritory}
+              onChange={(e) => setSelectedTerritory(e.target.value)}
+              title="Select control territory"
+              aria-label="Select control territory"
+            >
+              <option value="NDL-VSN Mainline Corridor (Southern Division)">NDL–VSN Mainline (Southern Div)</option>
+              <option value="MLG Junction Suburban Branch Loop">MLG Suburban Branch Loop</option>
+              <option value="KRN-SRP Quad Track Freight Bypass">KRN–SRP Quad Freight Bypass</option>
+            </select>
+          )}
+
           <StatusBadge status={data.simulation.status} />
           <span className="badge badge-muted">state v{data.simulation.state_version}</span>
         </div>
       </div>
+
+      {/* Region A: Section Controller Control Office Header Bar */}
+      {viewMode === "SECTION" && (
+        <div
+          className="section-controller-header flex-row justify-between items-center"
+          style={{
+            background: "#0F172A",
+            color: "#F8FAFC",
+            padding: "10px 16px",
+            borderRadius: "8px",
+            marginBottom: "12px",
+            flexWrap: "wrap",
+            gap: "12px",
+            border: "1px solid #1E293B",
+          }}
+        >
+          <div className="flex-row items-center gap-3">
+            <span
+              style={{
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                color: "#38BDF8",
+                textTransform: "uppercase",
+              }}
+            >
+              CONTROL DESK: SC-402
+            </span>
+            <span style={{ color: "#64748B" }}>|</span>
+            <span style={{ fontSize: "0.85rem", color: "#E2E8F0" }}>
+              Territory: <strong>{selectedTerritory}</strong> (5 Stations, 4 Sections)
+            </span>
+            <span style={{ color: "#64748B" }}>|</span>
+            <span className="badge" style={{ background: "#1E293B", color: "#94A3B8", fontSize: "0.74rem" }}>
+              Day Shift 06:00–14:00
+            </span>
+          </div>
+
+          <div className="flex-row items-center gap-3">
+            <div className="flex-row items-center gap-2">
+              <span className="small muted" style={{ color: "#94A3B8" }}>IST Clock:</span>
+              <span className="mono" style={{ fontSize: "0.85rem", color: "#F1F5F9", fontWeight: 600 }}>
+                {data.simulation.sim_time}:00 IST
+              </span>
+            </div>
+            <div className="flex-row items-center gap-2">
+              <span className="small muted" style={{ color: "#94A3B8" }}>Sim Time:</span>
+              <span className="mono" style={{ fontSize: "0.85rem", color: "#38BDF8", fontWeight: 700 }}>
+                T+{data.simulation.sim_time_min}m
+              </span>
+            </div>
+            <span style={{ color: "#64748B" }}>|</span>
+            <div className="flex-row items-center gap-2">
+              <span
+                className="badge"
+                style={{
+                  background: sectionKpiData?.data_freshness.status === "HEALTHY" ? "#065F46" : "#991B1B",
+                  color: "#ECFDF5",
+                  fontSize: "0.72rem",
+                }}
+              >
+                ● {sectionKpiData?.data_freshness.status || "HEALTHY"} TELEMETRY
+              </span>
+              <span className="small mono" style={{ color: "#94A3B8", fontSize: "0.75rem" }}>
+                {sectionKpiData?.data_freshness.freshness_seconds ?? 4.2}s latency
+              </span>
+            </div>
+            <span style={{ color: "#64748B" }}>|</span>
+            <span
+              className="badge"
+              style={{
+                background: unackCriticalCount > 0 ? "#7F1D1D" : "#14532D",
+                color: "#FEF2F2",
+                fontWeight: 600,
+                fontSize: "0.72rem",
+              }}
+            >
+              {unackCriticalCount > 0 ? `⚠ ${unackCriticalCount} UNACKNOWLEDGED ALERTS` : "✓ ALL ALERTS ACKNOWLEDGED"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 1. STATION MASTER ROLE VIEW */}
@@ -644,7 +759,7 @@ export function DashboardPage() {
       {/* ========================================================================= */}
       {viewMode === "SECTION" && sectionKpiData && (
         <>
-          {/* Section Controller 9 Standardized Corridor KPI Cards */}
+          {/* Region B: Section Controller 12 Standardized Corridor KPI Cards */}
           <div className="kpi-grid">
             <KpiCard
               label="Active Corridor Trains"
@@ -687,11 +802,11 @@ export function DashboardPage() {
               label="Junction Throat Load (MLG)"
               value={numberOrDash(sectionKpiData.kpis.junction_throat_load_pct)}
               unit="%"
-              hint={`Queue: ${sectionKpiData.kpis.junction_queue_length} · Status: ${sectionKpiData.kpis.junction_congestion_level}`}
+              hint={`Queue: ${sectionKpiData.kpis.junction_queue_length} · Status: ${sectionKpiData.kpis.junction_congestion_level || sectionKpiData.junction_status?.congestion_level || "MODERATE"}`}
               tone={
-                sectionKpiData.kpis.junction_throat_load_pct >= 80
+                (sectionKpiData.kpis.junction_throat_load_pct ?? 0) >= 80
                   ? "bad"
-                  : sectionKpiData.kpis.junction_throat_load_pct >= 50
+                  : (sectionKpiData.kpis.junction_throat_load_pct ?? 0) >= 50
                   ? "watch"
                   : "good"
               }
@@ -755,261 +870,495 @@ export function DashboardPage() {
               source="Audit Resolution Trail"
               quality={sectionKpiData.kpis.recovery_clearance_rate_pct !== null ? "CALCULATED" : "NO_DATA"}
             />
+            <KpiCard
+              label="Running vs Berthed"
+              value={`${corridorTrains.filter((t) => !t.station_id).length} / ${corridorTrains.filter((t) => !!t.station_id).length}`}
+              hint="In Section / At Station Platforms"
+              tone="neutral"
+              period="Current Instant"
+              source="Axle Counter & Station EI"
+              quality="MEASURED"
+              tooltip="Comparison of trains traversing block sections versus dwelling at station berths"
+            />
+            <KpiCard
+              label="Active Speed Restrictions"
+              value="3"
+              unit=" TSR/PSR"
+              hint="1 TSR (30 km/h) · 2 PSR (Loop/Bridge)"
+              tone="watch"
+              period="Current Bulletin"
+              source="Engineering Caution Register"
+              quality="MEASURED"
+              tooltip="Permanent and temporary speed restrictions in effect across territory"
+            />
+            <KpiCard
+              label="Pending Dispatch Decisions"
+              value={sectionKpiData.pending_decisions.length}
+              hint="Advisory CP-SAT / PPO options"
+              tone={sectionKpiData.pending_decisions.length > 0 ? "watch" : "good"}
+              period="Advisory Horizon"
+              source="AI Regulation Workspace"
+              quality="CALCULATED"
+              tooltip="Automated regulation proposals requiring human Section Controller authorization"
+            />
           </div>
 
-          {/* Section Controller Master Time-Distance Train Graph */}
+          {/* Region C: Multi-Station Territory Control Strip */}
           <Panel
-            title="Section Controller Time-Distance Train Graph"
-            subtitle="Master string chart tracking corridor train trajectories, station dwell times, and single-line crossings"
+            title="Multi-Station Territory Control Strip"
+            subtitle="Real-time multi-station oversight across Nandpur, Karanpur, Malgaon Junction, Suryapur, and Vasanthpur. Click any station card to inspect local interlocking and platform berths."
           >
-            <TimeDistanceGraph
+            <StationControlStrip
               stations={corridorStations}
-              sections={corridorSections}
               trains={corridorTrains}
+              platforms={data.available_platforms || []}
+              outages={data.platform_outages || []}
               conflicts={corridorConflicts}
-              simTimeMin={data.simulation.sim_time_min}
-              simTimeString={data.simulation.sim_time}
+              closures={data.closures || []}
+              selectedStationId={inspectStationId}
+              onSelectStation={(stId) => setInspectStationId(inspectStationId === stId ? null : stId)}
             />
           </Panel>
 
-          {/* Real-time Horizontal Railway Corridor Schematic */}
-          <Panel
-            title="Corridor Traffic & Movement Schematic"
-            subtitle="Real-time track layout, block occupancies, and train movements across Nandpur–Vasanthpur corridor"
-          >
-            <RailwayCorridorDiagram
-              stations={corridorStations}
-              sections={corridorSections}
-              blockOccupancy={corridorBlocks}
-              trains={corridorTrains}
-              conflicts={corridorConflicts}
-              selectedStationId={stationId}
-              onSelectStation={(st) => {
-                setStationId(st);
-                setViewMode("STATION");
+          {/* Inline Station Inspection Console when a station is clicked */}
+          {inspectStationId && inspectedStation && (
+            <div
+              className="station-inspection-modal"
+              style={{
+                background: "#F8FAFC",
+                border: "2px solid #2563EB",
+                borderRadius: "8px",
+                padding: "16px",
+                marginBottom: "20px",
               }}
-            />
-          </Panel>
-
-          {/* Corridor Block Section Occupancy Matrix */}
-          <Panel
-            title="Corridor Block Section Occupancy Matrix"
-            subtitle="Absolute Block System status, axle counter detection, and line clear verification across all corridor blocks"
-          >
-            <BlockOccupancyMatrix
-              sections={corridorSections}
-              blockOccupancy={corridorBlocks}
-              trains={corridorTrains}
-            />
-          </Panel>
-
-          {/* Visual Analytics: Corridor Delay Distribution & Junction Throat Bottlenecks */}
-          <div className="grid-two">
-            <Panel
-              title="Corridor Delay & Punctuality Breakdown"
-              subtitle="Comparison of active train movements running on schedule versus delayed"
             >
-              <DelayDistributionChart
-                tiers={sectionDelayTiers}
-                title="Corridor Punctuality Status"
-                subtitle="On-time vs Delayed Trains"
-              />
-            </Panel>
-
-            <Panel
-              title="Junction Congestion & Throat Bottlenecks"
-              subtitle="Real-time Malgaon (MLG) diamond crossing throat load and single-line queues"
-            >
-              <div className="stack">
-                <div className="metric-box flex-row justify-between items-center" style={{ padding: "10px", background: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
-                  <div>
-                    <strong>Malgaon Junction Throat</strong>
-                    <p className="muted small" style={{ margin: 0 }}>
-                      Capacity: {sectionKpiData.junction_status.throat_capacity} simultaneous diamond movements
-                    </p>
-                  </div>
-                  <Badge
-                    tone={
-                      sectionKpiData.junction_status.congestion_level === "SATURATED"
-                        ? "bad"
-                        : sectionKpiData.junction_status.congestion_level === "HIGH"
-                        ? "watch"
-                        : "good"
-                    }
-                  >
-                    {sectionKpiData.junction_status.congestion_level}
-                  </Badge>
-                </div>
-
+              <div
+                className="flex-row justify-between items-center"
+                style={{
+                  marginBottom: "12px",
+                  borderBottom: "1px solid #CBD5E1",
+                  paddingBottom: "8px",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
                 <div>
-                  <small className="muted field-label">Single-Line Bottleneck Blocks Occupied</small>
-                  {sectionKpiData.occupied_bottlenecks.length === 0 ? (
-                    <p className="small text-success" style={{ margin: "4px 0 0" }}>All single-line bottlenecks (B1, B2, B4, B5) currently clear.</p>
-                  ) : (
-                    <div className="flex-row gap-2 mt-1">
-                      {sectionKpiData.occupied_bottlenecks.map((b) => (
-                        <span key={b.block_id} className="badge badge-watch">
-                          Block {b.block_id}: Train {b.train_id}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <small className="muted field-label">Active Throat Transits ({sectionKpiData.junction_status.active_transits}/2)</small>
-                  <p className="small" style={{ margin: "4px 0 0" }}>
-                    {sectionKpiData.junction_status.transiting_trains.length > 0
-                      ? `Transiting: ${sectionKpiData.junction_status.transiting_trains.join(", ")}`
-                      : "No active diamond crossings currently occupying throat."}
+                  <h3 style={{ margin: 0, color: "#1E293B", fontSize: "1.1rem" }}>
+                    Station Master Yard Inspection — {inspectedStation.name} ({inspectedStation.id})
+                  </h3>
+                  <p className="muted small" style={{ margin: "2px 0 0" }}>
+                    Direct Electronic Interlocking (EI) track layout, platform berthing status, and local movements for Section Controller oversight
                   </p>
                 </div>
+                <div className="flex-row gap-2">
+                  <button
+                    type="button"
+                    className="button button-small button-ghost"
+                    onClick={() => {
+                      setStationId(inspectStationId);
+                      setViewMode("STATION");
+                    }}
+                  >
+                    Switch to Full Station Master View ↗
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-small button-primary"
+                    onClick={() => setInspectStationId(null)}
+                  >
+                    Close Station Inspection ✕
+                  </button>
+                </div>
               </div>
-            </Panel>
+              <div className="stack">
+                <StationWorkingDiagram
+                  station={inspectedStation}
+                  platforms={data.available_platforms || []}
+                  outages={data.platform_outages || []}
+                  trains={corridorTrains}
+                />
+                <div className="grid-two" style={{ marginTop: "12px" }}>
+                  <StationPlatformBerths
+                    stationName={inspectedStation.name}
+                    slots={
+                      inspectStationId === "MLG" && stationKpiData?.platform_slots
+                        ? stationKpiData.platform_slots
+                        : (inspectedStation.platforms || ["P1", "P2"]).map((p, idx) => ({
+                            platform_id: p,
+                            status: idx === 0 ? "OCCUPIED" : "AVAILABLE",
+                            train_id: idx === 0 ? "EXP-101" : null,
+                            description: idx === 0 ? "Occupied by Express" : "Clear and Signalled",
+                          }))
+                    }
+                  />
+                  <StationTrainBoard
+                    stationId={inspectedStation.id}
+                    stationName={inspectedStation.name}
+                    trains={corridorTrains}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Workspace Navigator Tabs */}
+          <div
+            className="flex-row gap-2 items-center"
+            style={{
+              margin: "16px 0 12px",
+              borderBottom: "2px solid #E2E8F0",
+              paddingBottom: "8px",
+              overflowX: "auto",
+            }}
+          >
+            <span className="small muted" style={{ fontWeight: 600, marginRight: "8px" }}>
+              CONTROL WORKSPACES:
+            </span>
+            {[
+              { id: "ALL", label: "Master Console (All Workspaces)" },
+              { id: "GRAPH", label: "Time-Distance Graph & Attention" },
+              { id: "BLOCKS", label: "Corridor Blocks & Bottlenecks" },
+              { id: "LEDGER", label: "Train Movement Ledger" },
+              { id: "REGULATION", label: "Conflict & AI Regulation" },
+              { id: "RESTRICTIONS", label: "TSR / PSR & Incidents" },
+              { id: "HANDOVER", label: "Coordination & Shift Handover" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`button button-small ${activeSectionTab === tab.id ? "button-primary" : "button-ghost"}`}
+                onClick={() => setActiveSectionTab(tab.id as typeof activeSectionTab)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* Active Corridor Trains Real-time Ledger */}
-          <Panel
-            title="Corridor Active Trains Ledger"
-            subtitle="Movement progress, track locations, and projected delays across the corridor"
-            actions={
-              <Link className="button button-small" to="/trains">
-                View Train Movements
-              </Link>
-            }
-          >
-            {corridorTrains.length === 0 ? (
-              <EmptyState title="No active corridor trains" description="No trains currently running on corridor." />
-            ) : (
-              <div className="table-wrapper" tabIndex={0} role="region" aria-label="Corridor active trains table">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Train</th>
-                      <th>Type / Priority</th>
-                      <th>Direction</th>
-                      <th>Track Location</th>
-                      <th>Delay</th>
-                      <th>Waiting / Reason</th>
-                      <th>Route Progress</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {corridorTrains.slice(0, 8).map((t) => (
-                      <tr key={t.id}>
-                        <td>
-                          <strong>{t.name}</strong>
-                          <span className="muted small d-block mono">{t.id}</span>
-                        </td>
-                        <td>
-                          <Badge tone="muted">{t.train_type} (P{t.priority})</Badge>
-                        </td>
-                        <td>
-                          <Badge tone="muted">{t.direction}</Badge>
-                        </td>
-                        <td>
-                          {t.station_id ? (
-                            <span>At Station <strong>{t.station_id}</strong> (PF {t.platform || "—"})</span>
-                          ) : t.block_id ? (
-                            <span>In Block <strong>{t.block_id}</strong> ({t.section_id})</span>
-                          ) : (
-                            <span className="muted">Pending Entry</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={delayTone(t.projected_delay_min)}>
-                            {t.projected_delay_min > 0 ? `+${t.projected_delay_min}m` : "On time"}
-                          </span>
-                        </td>
-                        <td>
-                          {t.waiting_reason ? (
-                            <span className="text-watch small">{t.waiting_reason}</span>
-                          ) : (
-                            <span className="muted small">Clear run</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className="small muted mono">{t.origin} → {t.destination}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
+          {/* WORKSPACE 1: Master Time-Distance Graph & Operational Attention Panel */}
+          {(activeSectionTab === "ALL" || activeSectionTab === "GRAPH") && (
+            <div className="stack" style={{ marginBottom: "20px" }}>
+              {/* Region D: Section Controller Master Time-Distance Train Graph */}
+              <Panel
+                title="Section Controller Time-Distance Train Graph"
+                subtitle="Master string chart tracking corridor train trajectories, station dwell times, and single-line crossings"
+              >
+                <TimeDistanceGraph
+                  stations={corridorStations}
+                  sections={corridorSections}
+                  trains={corridorTrains}
+                  conflicts={corridorConflicts}
+                  simTimeMin={data.simulation.sim_time_min}
+                  simTimeString={data.simulation.sim_time}
+                />
+              </Panel>
 
-          {/* Corridor Dispatch Decisions & Active Conflicts */}
-          <Panel
-            title="Corridor Dispatch Decisions & Conflicts"
-            subtitle="Active conflicts requiring dispatcher attention across the section"
-            actions={
-              <Link className="button button-small" to="/recommendations">
-                Decision Queue
-              </Link>
-            }
-          >
-            {sectionKpiData.pending_decisions.length === 0 && sectionKpiData.active_conflicts.length === 0 ? (
-              <EmptyState
-                title="Corridor Operating Optimally"
-                description="No unresolved conflicts or pending dispatch decisions."
-              />
-            ) : (
+              {/* Region E: Operational Attention Panel */}
+              <OperationalAttentionPanel conflicts={corridorConflicts} />
+            </div>
+          )}
+
+          {/* WORKSPACE 2: Corridor Blocks, Bottlenecks & Schematics */}
+          {(activeSectionTab === "ALL" || activeSectionTab === "BLOCKS") && (
+            <div className="stack" style={{ marginBottom: "20px" }}>
+              {/* Real-time Horizontal Railway Corridor Schematic */}
+              <Panel
+                title="Corridor Traffic & Movement Schematic"
+                subtitle="Real-time track layout, block occupancies, and train movements across Nandpur–Vasanthpur corridor"
+              >
+                <RailwayCorridorDiagram
+                  stations={corridorStations}
+                  sections={corridorSections}
+                  blockOccupancy={corridorBlocks}
+                  trains={corridorTrains}
+                  conflicts={corridorConflicts}
+                  selectedStationId={stationId}
+                  onSelectStation={(st) => {
+                    setStationId(st);
+                    setViewMode("STATION");
+                  }}
+                />
+              </Panel>
+
+              {/* Corridor Block Section Occupancy Matrix */}
+              <Panel
+                title="Corridor Block Section Occupancy Matrix"
+                subtitle="Absolute Block System status, axle counter detection, and line clear verification across all corridor blocks"
+              >
+                <BlockOccupancyMatrix
+                  sections={corridorSections}
+                  blockOccupancy={corridorBlocks}
+                  trains={corridorTrains}
+                />
+              </Panel>
+
+              {/* Visual Analytics: Corridor Delay Distribution & Junction Throat Bottlenecks */}
               <div className="grid-two">
-                <div className="stack">
-                  <h4 style={{ margin: "0 0 8px", fontSize: "0.86rem", color: "#475569" }}>
-                    Pending Dispatch Decisions ({sectionKpiData.pending_decisions.length})
-                  </h4>
-                  {sectionKpiData.pending_decisions.length === 0 ? (
-                    <p className="small muted">No dispatch decisions pending review.</p>
-                  ) : (
-                    sectionKpiData.pending_decisions.map((d) => (
-                      <div key={d.id} className="list-row" style={{ padding: "0.75rem", background: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
-                        <div>
-                          <Link to={`/recommendations/${d.id}`} className="list-title">
-                            {d.label}
-                          </Link>
-                          <p className="muted small" style={{ margin: "2px 0 0" }}>
-                            Scope: {d.affected_stations.join(", ") || "Network"} · ID: {d.id}
-                          </p>
-                        </div>
-                        <div className="flex-row gap-2 items-center">
-                          {d.disagreement && <span className="badge badge-watch">DISAGREEMENT</span>}
-                          <Link to={`/recommendations/${d.id}`} className="button button-small button-primary">
-                            Decide
-                          </Link>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <Panel
+                  title="Corridor Delay & Punctuality Breakdown"
+                  subtitle="Comparison of active train movements running on schedule versus delayed"
+                >
+                  <DelayDistributionChart
+                    tiers={sectionDelayTiers}
+                    title="Corridor Punctuality Status"
+                    subtitle="On-time vs Delayed Trains"
+                  />
+                </Panel>
 
-                <div className="stack">
-                  <h4 style={{ margin: "0 0 8px", fontSize: "0.86rem", color: "#475569" }}>
-                    Active Corridor Conflicts ({sectionKpiData.active_conflicts.length})
-                  </h4>
-                  {sectionKpiData.active_conflicts.length === 0 ? (
-                    <p className="small muted">No unresolved route or block conflicts.</p>
-                  ) : (
-                    sectionKpiData.active_conflicts.map((c) => (
-                      <div key={c.id} className="list-row" style={{ padding: "0.75rem", background: "#FEF2F2", borderRadius: "6px", border: "1px solid #FECACA" }}>
-                        <div>
-                          <strong>{c.type.replace(/_/g, " ")}</strong>
-                          <p className="muted small" style={{ margin: "2px 0 0" }}>
-                            Location: {c.location.label} · Trains: {c.trains.join(", ") || "None"}
-                          </p>
-                          <p className="muted small" style={{ margin: "2px 0 0" }}>
-                            Window: {c.start && c.end ? `${c.start}–${c.end}` : "Now"}
-                          </p>
-                        </div>
-                        <SeverityBadge severity={c.severity} />
+                <Panel
+                  title="Junction Congestion & Throat Bottlenecks"
+                  subtitle="Real-time Malgaon (MLG) diamond crossing throat load and single-line queues"
+                >
+                  <div className="stack">
+                    <div
+                      className="metric-box flex-row justify-between items-center"
+                      style={{ padding: "10px", background: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0" }}
+                    >
+                      <div>
+                        <strong>Malgaon Junction Throat</strong>
+                        <p className="muted small" style={{ margin: 0 }}>
+                          Capacity: {sectionKpiData.junction_status?.throat_capacity ?? 2} simultaneous diamond movements
+                        </p>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <Badge
+                        tone={
+                          (sectionKpiData.junction_status?.congestion_level || sectionKpiData.kpis.junction_congestion_level) === "SATURATED"
+                            ? "bad"
+                            : (sectionKpiData.junction_status?.congestion_level || sectionKpiData.kpis.junction_congestion_level) === "HIGH"
+                            ? "watch"
+                            : "good"
+                        }
+                      >
+                        {sectionKpiData.junction_status?.congestion_level || sectionKpiData.kpis.junction_congestion_level || "MODERATE"}
+                      </Badge>
+                    </div>
+
+                    <div>
+                      <small className="muted field-label">Single-Line Bottleneck Blocks Occupied</small>
+                      {sectionKpiData.occupied_bottlenecks && sectionKpiData.occupied_bottlenecks.length > 0 ? (
+                        <div className="flex-row gap-2 mt-1">
+                          {sectionKpiData.occupied_bottlenecks.map((b) => (
+                            <span key={b.block_id} className="badge badge-watch">
+                              Block {b.block_id}: Train {b.train_id}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="small text-success" style={{ margin: "4px 0 0" }}>
+                          All single-line bottlenecks (B1, B2, B4, B5) currently clear.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <small className="muted field-label">
+                        Active Throat Transits ({sectionKpiData.junction_status?.active_transits ?? 0}/2)
+                      </small>
+                      <p className="small" style={{ margin: "4px 0 0" }}>
+                        {sectionKpiData.junction_status?.transiting_trains && sectionKpiData.junction_status.transiting_trains.length > 0
+                          ? `Transiting: ${sectionKpiData.junction_status.transiting_trains.join(", ")}`
+                          : "No active diamond crossings currently occupying throat."}
+                      </p>
+                    </div>
+                  </div>
+                </Panel>
               </div>
-            )}
-          </Panel>
+            </div>
+          )}
+
+          {/* WORKSPACE 3: Train Movement Ledger */}
+          {(activeSectionTab === "ALL" || activeSectionTab === "LEDGER") && (
+            <div className="stack" style={{ marginBottom: "20px" }}>
+              <TrainMovementLedger
+                trains={corridorTrains}
+                stations={corridorStations}
+                selectedTrainId={selectedLedgerTrainId}
+                onSelectTrain={(id) => setSelectedLedgerTrainId(id === selectedLedgerTrainId ? null : id)}
+              />
+
+              {/* Active Corridor Trains Real-time Ledger */}
+              <Panel
+                title="Corridor Active Trains Ledger"
+                subtitle="Movement progress, track locations, and projected delays across the corridor"
+                actions={
+                  <Link className="button button-small" to="/trains">
+                    View Train Movements
+                  </Link>
+                }
+              >
+                {corridorTrains.length === 0 ? (
+                  <EmptyState title="No active corridor trains" description="No trains currently running on corridor." />
+                ) : (
+                  <div className="table-wrapper" tabIndex={0} role="region" aria-label="Corridor active trains table">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Train</th>
+                          <th>Type / Priority</th>
+                          <th>Direction</th>
+                          <th>Track Location</th>
+                          <th>Delay</th>
+                          <th>Waiting / Reason</th>
+                          <th>Route Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {corridorTrains.slice(0, 8).map((t) => (
+                          <tr key={t.id}>
+                            <td>
+                              <strong>{t.name}</strong>
+                              <span className="muted small d-block mono">{t.id}</span>
+                            </td>
+                            <td>
+                              <Badge tone="muted">{t.train_type} (P{t.priority})</Badge>
+                            </td>
+                            <td>
+                              <Badge tone="muted">{t.direction}</Badge>
+                            </td>
+                            <td>
+                              {t.station_id ? (
+                                <span>At Station <strong>{t.station_id}</strong> (PF {t.platform || "—"})</span>
+                              ) : t.block_id ? (
+                                <span>In Block <strong>{t.block_id}</strong> ({t.section_id})</span>
+                              ) : (
+                                <span className="muted">Pending Entry</span>
+                              )}
+                            </td>
+                            <td>
+                              <span className={delayTone(t.projected_delay_min)}>
+                                {t.projected_delay_min > 0 ? `+${t.projected_delay_min}m` : "On time"}
+                              </span>
+                            </td>
+                            <td>
+                              {t.waiting_reason ? (
+                                <span className="text-watch small">{t.waiting_reason}</span>
+                              ) : (
+                                <span className="muted small">Clear run</span>
+                              )}
+                            </td>
+                            <td>
+                              <span className="small muted mono">{t.origin} → {t.destination}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {/* WORKSPACE 4: Conflict & AI Regulation Workspace */}
+          {(activeSectionTab === "ALL" || activeSectionTab === "REGULATION") && (
+            <div className="stack" style={{ marginBottom: "20px" }}>
+              <ConflictRegulationWorkspace
+                conflicts={corridorConflicts}
+                pendingDecisions={sectionKpiData.pending_decisions || []}
+                trains={corridorTrains}
+                stations={corridorStations}
+              />
+
+              {/* Corridor Dispatch Decisions & Active Conflicts */}
+              <Panel
+                title="Corridor Dispatch Decisions & Conflicts"
+                subtitle="Active conflicts requiring dispatcher attention across the section"
+                actions={
+                  <Link className="button button-small" to="/recommendations">
+                    Decision Queue
+                  </Link>
+                }
+              >
+                {sectionKpiData.pending_decisions.length === 0 && sectionKpiData.active_conflicts.length === 0 ? (
+                  <EmptyState
+                    title="Corridor Operating Optimally"
+                    description="No unresolved conflicts or pending dispatch decisions."
+                  />
+                ) : (
+                  <div className="grid-two">
+                    <div className="stack">
+                      <h4 style={{ margin: "0 0 8px", fontSize: "0.86rem", color: "#475569" }}>
+                        Pending Dispatch Decisions ({sectionKpiData.pending_decisions.length})
+                      </h4>
+                      {sectionKpiData.pending_decisions.length === 0 ? (
+                        <p className="small muted">No dispatch decisions pending review.</p>
+                      ) : (
+                        sectionKpiData.pending_decisions.map((d) => (
+                          <div key={d.id} className="list-row" style={{ padding: "0.75rem", background: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                            <div>
+                              <Link to={`/recommendations/${d.id}`} className="list-title">
+                                {d.label}
+                              </Link>
+                              <p className="muted small" style={{ margin: "2px 0 0" }}>
+                                Scope: {d.affected_stations.join(", ") || "Network"} · ID: {d.id}
+                              </p>
+                            </div>
+                            <div className="flex-row gap-2 items-center">
+                              {d.disagreement && <span className="badge badge-watch">DISAGREEMENT</span>}
+                              <Link to={`/recommendations/${d.id}`} className="button button-small button-primary">
+                                Decide
+                              </Link>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="stack">
+                      <h4 style={{ margin: "0 0 8px", fontSize: "0.86rem", color: "#475569" }}>
+                        Active Corridor Conflicts ({sectionKpiData.active_conflicts.length})
+                      </h4>
+                      {sectionKpiData.active_conflicts.length === 0 ? (
+                        <p className="small muted">No unresolved route or block conflicts.</p>
+                      ) : (
+                        sectionKpiData.active_conflicts.map((c) => (
+                          <div key={c.id} className="list-row" style={{ padding: "0.75rem", background: "#FEF2F2", borderRadius: "6px", border: "1px solid #FECACA" }}>
+                            <div>
+                              <strong>{c.type.replace(/_/g, " ")}</strong>
+                              <p className="muted small" style={{ margin: "2px 0 0" }}>
+                                Location: {c.location.label} · Trains: {c.trains.join(", ") || "None"}
+                              </p>
+                              <p className="muted small" style={{ margin: "2px 0 0" }}>
+                                Window: {c.start && c.end ? `${c.start}–${c.end}` : "Now"}
+                              </p>
+                            </div>
+                            <SeverityBadge severity={c.severity} />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {/* WORKSPACE 5: Engineering Restrictions & Incidents */}
+          {(activeSectionTab === "ALL" || activeSectionTab === "RESTRICTIONS") && (
+            <div className="stack" style={{ marginBottom: "20px" }}>
+              <RestrictionsAndIncidentsPanel
+                closures={data.closures || []}
+                outages={data.platform_outages || []}
+                stations={corridorStations}
+              />
+            </div>
+          )}
+
+          {/* WORKSPACE 6: Inter-Departmental Coordination & Shift Handover */}
+          {(activeSectionTab === "ALL" || activeSectionTab === "HANDOVER") && (
+            <div className="stack" style={{ marginBottom: "20px" }}>
+              <CoordinationAndHandover
+                territoryName={selectedTerritory}
+                simTime={`${data.simulation.sim_time} IST`}
+                activeTrainsCount={sectionKpiData.kpis.trains_active}
+                delayedTrainsCount={sectionKpiData.kpis.trains_delayed}
+                openConflictsCount={sectionKpiData.kpis.conflicts_total}
+                activeRestrictionsCount={3}
+                sectionId={selectedTerritory}
+                controllerName="SC-402 (Day Shift)"
+                shiftName="06:00 - 14:00 IST"
+              />
+            </div>
+          )}
         </>
       )}
 
