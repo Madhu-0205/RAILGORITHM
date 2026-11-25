@@ -38,21 +38,54 @@ export function KpiCard({
   unit,
   hint,
   tone = "neutral",
+  period,
+  source,
+  quality,
+  tooltip,
 }: {
   label: string;
   value: string | number;
   unit?: string;
   hint?: string;
-  tone?: "neutral" | "good" | "watch" | "bad";
+  tone?: "neutral" | "good" | "watch" | "bad" | "info";
+  period?: string;
+  source?: string;
+  quality?: "MEASURED" | "CALCULATED" | "PREDICTED" | "HEURISTIC" | "NO_DATA";
+  tooltip?: string;
 }) {
+  const toneIcon =
+    tone === "good" ? "✓" : tone === "watch" ? "⚠" : tone === "bad" ? "✕" : tone === "info" ? "ℹ" : "●";
+
   return (
-    <div className={`kpi kpi-${tone}`}>
-      <span className="kpi-label">{label}</span>
-      <span className="kpi-value">
-        {value}
-        {unit && <span className="kpi-unit">{unit}</span>}
-      </span>
-      {hint && <span className="kpi-hint">{hint}</span>}
+    <div className={`kpi kpi-${tone}`} title={tooltip}>
+      <div className="kpi-header">
+        <span className="kpi-label">{label}</span>
+        {quality && (
+          <span className={`kpi-quality-badge quality-${quality.toLowerCase()}`} title={`Data classification: ${quality}`}>
+            {quality}
+          </span>
+        )}
+      </div>
+      <div className="kpi-value-row">
+        <span className="kpi-value">
+          {value}
+          {unit && <span className="kpi-unit">{unit}</span>}
+        </span>
+        <span className="kpi-tone-indicator" aria-hidden="true">
+          {toneIcon}
+        </span>
+      </div>
+      {(hint || period || source) && (
+        <div className="kpi-meta-row">
+          {hint && <span className="kpi-hint">{hint}</span>}
+          {period && <span className="kpi-period">{period}</span>}
+          {source && (
+            <span className="kpi-source" title={`Source: ${source}`}>
+              Src: {source}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

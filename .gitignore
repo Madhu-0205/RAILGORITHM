@@ -6,6 +6,8 @@ __pycache__/
 .ruff_cache/
 backend/railgorithm.db
 backend/*.db
+backend/*.db-wal
+backend/*.db-shm
 *.sqlite
 *.sqlite3
 frontend/node_modules/

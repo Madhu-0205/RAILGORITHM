@@ -1,0 +1,91 @@
+# Station Master Operational Dashboard Specification
+
+## 1. Overview & Operational Purpose
+
+The **Station Master Dashboard** provides immediate operational visibility into station-level railway traffic, platform allocation, train berthing intervals, and local decision queues.
+
+Designed specifically for station operating staff (Station Masters, Assistant Station Masters, and Yard Masters), this screen enables operating personnel to evaluate local platform conditions, identify approaching delayed services, and execute advisory platform diversions or holds within 10 seconds.
+
+---
+
+## 2. Key Screen Components
+
+### A. Station Selector & Operational Header
+- **Station Selector**: Rapid dropdown switching between stations (`NDL` — Nandpur, `KRN` — Karanpur, `MLG` — Malgaon Junction, `SRP` — Suryapur, `VSN` — Vasanthpur). When authenticated as a Station Master with a scoped station assignment (e.g. `user.station_id = "MLG"`), the dashboard defaults to that designated station.
+- **Clock & Environment**: Displays current simulated time in **Indian Standard Time (IST)**, simulation status (`RUNNING` / `PAUSED`), and state version watermark.
+
+---
+
+### B. Standardized Station KPI Metrics
+
+The Station Master view renders **8 authoritative KPI cards**:
+
+1. **Trains Monitored**: Total scheduled train movements within the active operational window (including approaching and berthed services), with delayed train count as a secondary hint.
+2. **Schedule Adherence**: Percentage of monitored trains arriving within the 5-minute punctuality threshold. Displays `"—"` (`NO_DATA`) if no trains are scheduled in the observation window.
+3. **Platform Availability**: Percentage of passenger platform tracks currently free and clear for reception, alongside a ratio indicator (e.g., `2 of 4 platforms free`).
+4. **Average Arrival Delay**: Mean delay for approaching trains in minutes. Guarded by `null` semantics (`"—"`) when zero trains are approaching.
+5. **Average Departure Delay**: Mean departure delay for stationed or originating trains. Guarded by `null` semantics (`"—"`) when zero trains are berthed.
+6. **On-Time Performance**: Absolute count of trains meeting on-time arrival criteria out of total monitored trains.
+7. **Station Alerts & Recs**: Count of active track conflicts (e.g., platform dwell extension, conflicting simultaneous movements) and pending local advisory recommendations.
+8. **Pending Local Decisions**: Number of AI-generated advisory recommendations awaiting explicit Station Master confirmation.
+
+---
+
+### C. Live Platform Berthing Status Visualizer
+
+The **Platform Berthing Visualizer** renders station tracks as horizontal operational berths:
+- **Platform Track Identifier**: Platform number (e.g. `Platform 1`, `Platform 2`, `Platform 3`).
+- **Real-Time Status Indicator**:
+  - `AVAILABLE` (Green): Track clear for reception and signaled for incoming movements.
+  - `OCCUPIED` (Blue): Berthed train displayed with Train Number, scheduled departure, and projected dwell.
+  - `OUTAGE` (Red): Platform blocked due to maintenance, track circuit failure, or overhead equipment outage.
+- **Visual Track Line**: Horizontal colored track bar giving immediate visual representation of track clearance.
+
+---
+
+### D. Visual Analytics: Volume & Delay Distribution
+
+1. **Hourly Station Volumes Chart (`HourlyMovementsChart`)**:
+   - Time-bucketed bar chart displaying scheduled and projected **Arrivals (Blue)** and **Departures (Green)** across operational time slices (e.g., `06:00`, `07:00`, `08:00`).
+   - Enables the Station Master to anticipate upcoming arrival clusters and coordinate platform reception paths.
+2. **Station Delay Distribution Chart (`DelayDistributionChart`)**:
+   - Horizontal progress distribution showing the proportion of trains operating:
+     - `On Time (≤5m)` (Green)
+     - `5–15 min delay` (Amber)
+     - `>15 min delay` (Red)
+
+---
+
+### E. Filterable Monitored Train Movements Table
+
+A complete tabular ledger of all train movements affecting the station, featuring:
+- **Interactive Quick Filters**:
+  - `All Monitored Trains`
+  - `Approaching Station`
+  - `At Platform Berth`
+  - `Delayed Only (>0m)`
+- **Full-Text Search**: Filter by Train Number, Train Name, or Destination.
+- **Operational Data Columns**:
+  1. `Train`: Train Name and bold Train ID.
+  2. `Direction`: Target destination station.
+  3. `Type / Priority`: Service category (e.g. `EXPRESS (P1)`, `FREIGHT (P4)`).
+  4. `Sched Arr`: Scheduled arrival time from working timetable.
+  5. `Sched Dep`: Scheduled departure time.
+  6. `Platform Berth`: Allocated platform or unallocated indicator.
+  7. `Delay`: Projected delay minutes (`+Xm` in amber/red or `On time` in green).
+  8. `Operational Status`: `Berthed at Station` or `Approaching`.
+
+---
+
+### F. Station Decisions & Operational Alerts Queue
+
+- **Pending Advisory Recommendations**: Advisory platform reassignments or holds generated by CP-SAT optimization. Station Masters can inspect the rationale and click **Review & Decide** to navigate to the decision review screen.
+- **Active Track Conflicts**: Platform conflicts detected by the independent validator, detailing conflict type, affected train numbers, platform location, and detection time window.
+
+---
+
+## 3. Scope-Based Access Control
+
+Station Masters operate under strict role-based access control:
+- A Station Master assigned to a specific station (e.g. `MLG`) may view corridor-wide monitoring information for situational awareness, but **cannot approve decisions affecting sections or stations outside their jurisdiction**.
+- If a recommendation involves a multi-station corridor reroute, it requires **Section Controller** review and authorization.

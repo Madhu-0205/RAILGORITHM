@@ -27,9 +27,14 @@ AI-assisted railway traffic monitoring, scheduling, and **human decision support
   - Punctuality threshold is made configurable via `punctuality_threshold_min` (default: 5 min) and documented as an administrative guideline (Railway Board Operating Directorate circulars for Mail/Express), not a statutory General Rule.
   - Formal null (`NO_DATA`) semantics for `schedule_adherence_pct`, `average_arrival_delay_min`, `average_departure_delay_min`, and `recovery_clearance_rate_pct` when observation windows contain 0 trains or 0 historical conflicts.
   - Standardized six operational health statuses across backend and frontend: `HEALTHY`, `DEGRADED`, `STALE`, `OFFLINE`, `DURABILITY_UNAVAILABLE`, `REPLAY_UNCERTAIN`.
-- **279 Automated Tests Passing (100% Pass Rate):**
+- **Railway Operations Dashboard Modernization:**
+  - Modern enterprise control-center design system: Deep Navy (`#101B2B` / `#17263B`) primary navigation, clean slate workspace (`#F1F5F9`), and pure white cards (`#FFFFFF`).
+  - Standardized Station Master 8-KPI dashboard with live platform berth tracks (`StationPlatformBerths`), hourly movements chart (`HourlyMovementsChart`), and delay tier distribution (`DelayDistributionChart`).
+  - Standardized Section Controller 9-KPI dashboard with interactive horizontal SVG railway corridor schematic (`RailwayCorridorDiagram`), Malgaon diamond crossing throat monitoring, and corridor active trains ledger.
+  - Strict WCAG 2.1 AA accessibility and responsive table wrappers (`role="region"`, `tabIndex={0}`).
+- **286 Automated Tests Passing (100% Pass Rate):**
   - **244 backend tests passed** (`pytest`).
-  - **35 frontend tests passed** across 8 test suites (`vitest`).
+  - **42 frontend tests passed** across 9 test suites (`vitest`).
   - Clean TypeScript compilation (`tsc --noEmit`).
   - Successful production build (`vite build`).
 - **16-Dimensional Performance & Reliability Benchmark:**
@@ -60,6 +65,11 @@ AI-assisted railway traffic monitoring, scheduling, and **human decision support
 
 Full architectural specifications, fault-injection reports, mathematical derivations, and regulatory matrices are available in `docs/`:
 
+- [Dashboard Design System Specification](file:///Users/madhu/RAILGORITHM/docs/DASHBOARD_DESIGN_SYSTEM.md)
+- [KPI Definitions & Mathematical Semantics](file:///Users/madhu/RAILGORITHM/docs/KPI_DEFINITIONS_AND_SEMANTICS.md)
+- [Station Master Dashboard Specification](file:///Users/madhu/RAILGORITHM/docs/STATION_MASTER_DASHBOARD.md)
+- [Section Controller Dashboard Specification](file:///Users/madhu/RAILGORITHM/docs/SECTION_CONTROLLER_DASHBOARD.md)
+- [Frontend Modernization & Verification Report](file:///Users/madhu/RAILGORITHM/docs/FRONTEND_VERIFICATION.md)
 - [Durability & Failure Semantics Specification](file:///Users/madhu/RAILGORITHM/docs/DURABILITY_FAILURE_SEMANTICS.md)
 - [Multi-Feed Causal Event Ordering Specification](file:///Users/madhu/RAILGORITHM/docs/CAUSAL_EVENT_ORDERING.md)
 - [Concurrency & Fault Injection Engineering Report](file:///Users/madhu/RAILGORITHM/docs/CONCURRENCY_AND_FAULT_INJECTION.md)

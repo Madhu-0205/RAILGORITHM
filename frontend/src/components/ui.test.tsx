@@ -40,6 +40,23 @@ describe("KpiCard", () => {
     expect(screen.getByText("7.5")).toBeInTheDocument();
     expect(screen.getByText("max 12 min")).toBeInTheDocument();
   });
+
+  it("renders reporting period, data source, and data quality indicator when provided", () => {
+    render(
+      <KpiCard
+        label="Schedule Adherence"
+        value="85.5"
+        unit="%"
+        period="Rolling 60m"
+        source="Station Arrival Log"
+        quality="CALCULATED"
+        tooltip="Trains within 5 minutes of scheduled timetable"
+      />,
+    );
+    expect(screen.getByText("Rolling 60m")).toBeInTheDocument();
+    expect(screen.getByText(/CALCULATED/i)).toBeInTheDocument();
+    expect(screen.getByTitle("Trains within 5 minutes of scheduled timetable")).toBeInTheDocument();
+  });
 });
 
 describe("EmptyState", () => {

@@ -71,10 +71,10 @@ export function Shell() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">R</span>
+          <span className="brand-mark" aria-hidden="true">🚂</span>
           <div>
             <strong>RAILGORITHM</strong>
-            <small>Traffic decision support</small>
+            <small>Traffic Management System</small>
           </div>
         </div>
         <nav className="nav">
@@ -113,6 +113,11 @@ export function Shell() {
 
       <div className="main">
         <header className="topbar">
+          <div className="env-indicator flex-row gap-2 items-center">
+            <span className="badge badge-watch" title="Operating environment: Simulation mode with synthetic data">
+              ● SIMULATION MODE
+            </span>
+          </div>
           <div className="simulation-picker">
             <label htmlFor="simulation-select">Simulation</label>
             <select

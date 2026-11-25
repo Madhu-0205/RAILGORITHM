@@ -321,4 +321,53 @@ describe("DashboardPage Role Intelligence", () => {
     expect(screen.getByText("KPI Traceability & Mathematical Definitions")).toBeInTheDocument();
     expect(screen.getByText(/Secondary Delay Minutes \/ Initial Schedule Delay Minutes/i)).toBeInTheDocument();
   });
+
+  it("renders corridor traffic schematic in Section Controller view", async () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Section Controller Corridor Dashboard")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("img", { name: /corridor diagram showing track blocks/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Corridor Traffic & Movement Schematic")).toBeInTheDocument();
+    expect(screen.getByText("Corridor Active Trains Ledger")).toBeInTheDocument();
+  });
+
+  it("filters monitored train movements and renders charts in Station Master view", async () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Section Controller Corridor Dashboard")).toBeInTheDocument();
+    });
+
+    const stationBtn = screen.getByRole("button", { name: "Station View" });
+    fireEvent.click(stationBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Station Master Dashboard/i)).toBeInTheDocument();
+    });
+
+    // Charts should be present
+    expect(screen.getByText("Station Traffic Movements")).toBeInTheDocument();
+    expect(screen.getByText("Station Delay Distribution")).toBeInTheDocument();
+
+    // Table filter interaction
+    const searchInput = screen.getByPlaceholderText(/Train number, name or destination/i);
+    fireEvent.change(searchInput, { target: { value: "Superfast" } });
+    expect(screen.getByText("Superfast Express")).toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: "NonExistent" } });
+    expect(screen.getByText("No matching train movements")).toBeInTheDocument();
+  });
 });
