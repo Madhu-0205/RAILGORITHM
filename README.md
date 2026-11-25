@@ -1,4 +1,4 @@
-# RAILGORITHM 2.0
+# RAILGORITHM 2.1 — Trustworthy Intelligence & Benchmark Validation
 
 AI-assisted railway traffic management and **human decision support** on a deterministic, synthetic network. The system simulates train movements, detects projected conflicts, generates candidate control actions, checks feasibility with Google OR-Tools CP-SAT, independently validates every candidate against formal hard constraints, ranks them with a trained PPO policy, explains the evidence, and **waits for an authorised human controller to decide**.
 
@@ -6,23 +6,22 @@ AI-assisted railway traffic management and **human decision support** on a deter
 
 ---
 
-## What's New in Version 2.0
+## What's New in Version 2.1
 
-- **14 Deterministic Benchmark Scenarios:** Expanded from 8 to 14 scenarios, adding double-line overtaking, junction throat congestion, 4-hour engineering possessions, cascading delay propagation, multi-disruption recovery, and traffic surges.
-- **13-Type Conflict Taxonomy:** Comprehensive detection of block exclusivity, headway, single-line crossing, route overlaps, overtaking, platform capacity, junction throat bottlenecks, block closures, maintenance restrictions, and cascading delay risks.
-- **Configurable Multi-Profile CP-SAT:** Supports `balanced`, `delay_focused`, `priority_focused`, and `throughput_focused` objective profiles, reporting both solution value and proven lower bounds.
-- **PPO Candidate Ranker Upgrades:** Multi-seed evaluation on 6 held-out scenario families demonstrating **61.8% Top-1 match** (up from 25.8% baseline) and **15.26 mean regret** (down from 16.20) with zero constraint violations. Baseline checkpoints preserved.
-- **Assumptions & Constraint Specification:** 15 inspectable synthetic assumptions (`ASSUMPTIONS`) and 13 Hard + 4 Soft constraints (`CONSTRAINTS`) surfaced via API and a dedicated frontend screen.
-- **Enhanced Audit Integrity:** SHA-256 hash chain with dedicated `AuditChainHead` table and database triggers to detect tail truncation attacks.
-- **Security & PostgreSQL Migration Path:** Production boot assertions (`assert_safe_for_production`), login rate limiting, security headers, and PostgreSQL schema portability.
-- **Expanded Test Coverage:** 186 backend pytest tests and 26 frontend vitest tests passing with 100% success rate.
+- **PPO Baseline Reconciliation:** Reconciled historical 55.88% in-distribution training figure with the 25.84% held-out baseline, explaining dataset partition mismatch and candidate simulation bugfixes.
+- **8-Seed Multi-Seed Statistical Evaluation:** 178 decisions across held-out scenarios; Candidate V2 achieves **61.80% Top-1 match** ($\chi^2 = 46.74, p = 8.12 \times 10^{-12}$, statistically significant) and **86.2% residual conflict reduction** (1.39 vs 10.08); mean regret difference (15.258 vs 16.202) is honestly reported as not statistically significant ($p = 0.731$).
+- **CP-SAT Objective & Constraint Audit:** Formally audited 4 objective profiles, verified decision variables and mathematical lower bounds, explained the 26 feasible benchmark solves in `v2_cpsat.json`, and added 8 adversarial solver stress tests.
+- **Recommendation Disagreement Handling:** Formally audited 11 `MODEL_DISAGREEMENT` cases, verified dual-model visibility, trade-offs presentation, absence of auto-resolution, immutable human audit, and strict prohibition of uncalibrated confidence percentages.
+- **Unseen Scenario Generalization Testing:** Evaluated 3 novel unseen scenarios (`gen_freight_convoy_surge`, `gen_cascading_junction_gridlock`, `gen_emergency_single_line_cross`) across 4 seeds; Candidate V2 achieves **41.67% Top-1 match** (vs Baseline 0.0%), **46.2% regret reduction** (24.50 vs 45.50), **90.4% residual conflict reduction** (1.04 vs 10.83), and **zero constraint violations**.
+- **Adversarial Security & Audit Verification:** Verified SQLite triggers blocking `UPDATE` and `DELETE`, hash-chain tampering detection, tail truncation detection via `audit_chain_head`, head tampering detection, concurrent decision race condition handling (`[200, 409]`), RBAC station scoping, and stale recommendation rejection.
+- **232 Automated Tests:** 206 backend tests (`pytest`) and 26 frontend tests (`vitest`) passing with 100% success rate, clean TypeScript compilation, and clean production build.
 
 ---
 
 ## Core Principles
 
 1. **The human decides.** No recommendation is applied automatically. Approval requires explicit confirmation (`confirm_apply: true`) plus a written rationale (minimum 5 characters).
-2. **Validation is independent of AI.** CP-SAT and PPO cannot make an invalid action executable. A separate hard-constraint validator checks topology, exclusivity, headway, closures, platform availability, and hold policies.
+2. **Validation is independent of AI.** CP-SAT and PPO cannot make an invalid action executable. A separate hard-constraint validator checks topology, exclusivity, headway, closures, platform availability, hold policies, and junction throat capacities.
 3. **The system admits uncertainty.** Infeasibility, model disagreement, stale advice, and candidate limitations are surfaced explicitly. Confidence percentages are never fabricated.
 
 ---
@@ -57,7 +56,7 @@ FastAPI (Python 3.14)
   └── domain
         ├── spec.py            assumptions (15) and constraints (13 hard, 4 soft) manifest
         ├── network.py         synthetic topology (NDL–KRN–MLG–SRP–VSN, junction throats, gradients)
-        ├── scenarios.py       14 deterministic scenario definitions
+        ├── scenarios.py       14 deterministic scenario definitions + dynamic spec builder
         ├── state.py           simulation engine, actions, discrete-event progression
         ├── projection.py      future kinematic occupancy projection
         ├── conflicts.py       13-type conflict detection + deduplication
@@ -115,13 +114,13 @@ cd .. && PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --port 8000
 
 ## Verification and Testing
 
-### Backend Test Suite (186 tests)
+### Backend Test Suite (206 tests)
 
 ```bash
 cd /Users/madhu/RAILGORITHM
 PYTHONPATH=backend .venv/bin/pytest backend/tests -v
 ```
-**Result:** `186 passed in 3.36s`
+**Result:** `206 passed in 4.74s`
 
 ### Frontend Test Suite (26 tests) & Typecheck
 
@@ -137,18 +136,27 @@ npm run build
 
 ```bash
 # Run scenario, CP-SAT, and PPO benchmarks
-PYTHONPATH=backend .venv/bin/python backend/ml/benchmark.py --all --label v2
+PYTHONPATH=backend .venv/bin/python backend/ml/benchmark.py --all --label v2_1
+
+# Run multi-seed unseen generalization benchmark
+PYTHONPATH=backend .venv/bin/python backend/ml/run_generalization.py
 ```
 
 ---
 
 ## Documentation Index
 
-- `VERIFICATION.md` — Complete Version 2.0 verification report and baseline comparison.
+- `VERIFICATION.md` — Complete Version 2.1 verification report and baseline comparison.
+- `docs/PPO_BASELINE_RECONCILIATION.md` — Root cause analysis and reconciliation of historical baseline metrics.
+- `docs/PPO_STATISTICAL_EVALUATION.md` — 8-seed statistical evaluation, bootstrap CIs, paired t-test, and Wilcoxon tests.
+- `docs/CPSAT_OBJECTIVE_AND_CONSTRAINT_AUDIT.md` — Multi-objective CP-SAT formulation, bound verification, and adversarial stress tests.
+- `docs/DISAGREEMENT_ANALYSIS_REPORT.md` — Audit of model disagreement cases, dual visibility, and zero auto-resolution.
+- `docs/GENERALIZATION_TEST_REPORT.md` — Generalization and graceful degradation across novel unseen scenarios.
+- `docs/SECURITY_AND_AUDIT_REPORT.md` — Threat model, database triggers, hash chaining, and adversarial penetration tests.
+- `docs/REGRESSION_TEST_RESULTS.md` — Full automated regression test breakdown and defect fixes.
 - `docs/RAILWAY_SIMULATION_ASSUMPTIONS.md` — Formal synthetic assumptions register.
 - `docs/CONSTRAINT_SPECIFICATION.md` — Hard (HC-001..HC-013) and Soft (SC-001..SC-004) constraints.
 - `docs/PPO_TRAINING_AND_EVALUATION.md` — Neural policy training, multi-seed evaluation, and promotion report.
 - `docs/CPSAT_BENCHMARK_REPORT.md` — Multi-objective CP-SAT formulation and benchmark matrix.
 - `docs/SCENARIO_BENCHMARK_RESULTS.md` — 14-scenario benchmark results and pipeline latencies.
 - `docs/SECURITY_REVIEW.md` — Authentication, RBAC, audit hash chain, and PostgreSQL migration.
-- `docs/REGRESSION_TEST_RESULTS.md` — Full automated regression test breakdown and defect fixes.

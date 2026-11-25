@@ -114,6 +114,7 @@ def optimise(
     horizon_min: int | None = None,
     profile: str | None = None,
     weights: dict[str, int] | None = None,
+    time_limit_s: float | None = None,
 ) -> dict:
     started = time.perf_counter()
     network = Network.from_dict(state["network"])
@@ -339,7 +340,9 @@ def optimise(
         }
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = settings.cp_sat_time_limit_s
+    solver.parameters.max_time_in_seconds = (
+        float(time_limit_s) if time_limit_s is not None else settings.cp_sat_time_limit_s
+    )
     solver.parameters.num_search_workers = settings.cp_sat_workers
     solver.parameters.random_seed = seed
     response_status = solver.Solve(model)
@@ -510,6 +513,7 @@ def optimise_alternatives(
     state: dict,
     *,
     horizon_min: int | None = None,
+    time_limit_s: float | None = None,
     profiles: tuple[str, ...] = (
         "balanced",
         "delay_focused",
@@ -527,7 +531,12 @@ def optimise_alternatives(
     """
     results: list[dict] = []
     for profile in profiles:
-        result = optimise(state, horizon_min=horizon_min, profile=profile)
+        result = optimise(
+            state,
+            horizon_min=horizon_min,
+            profile=profile,
+            time_limit_s=time_limit_s,
+        )
         results.append(
             {
                 "profile": profile,

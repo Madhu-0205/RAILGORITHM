@@ -75,7 +75,7 @@ def simulation(client: TestClient, section_headers: dict) -> dict:
 
 
 @pytest.fixture()
-def db_session():
+def db_session(client: TestClient):
     session = SessionLocal()
     try:
         yield session

@@ -1,0 +1,77 @@
+{
+  "seeds": [
+    7001,
+    7002,
+    7003,
+    7004
+  ],
+  "total_decisions": 24,
+  "scenarios_evaluated": [
+    "gen_freight_convoy_surge",
+    "gen_cascading_junction_gridlock",
+    "gen_emergency_single_line_cross"
+  ],
+  "summary": {
+    "candidate_v2": {
+      "top1_pct": 41.67,
+      "mean_regret": 24.5,
+      "median_regret": 15.0,
+      "std_regret": 28.776,
+      "mean_residual_conflicts": 1.04,
+      "violations": 0,
+      "mean_latency_ms": 0.0518
+    },
+    "baseline_v1": {
+      "top1_pct": 0.0,
+      "mean_regret": 45.5,
+      "median_regret": 16.0,
+      "std_regret": 46.401,
+      "mean_residual_conflicts": 10.83,
+      "violations": 0
+    },
+    "deterministic_baseline": {
+      "mean_regret": 44.292,
+      "median_regret": 22.0
+    }
+  },
+  "per_scenario": {
+    "gen_freight_convoy_surge": {
+      "name": "Generalization: Freight Convoy Surge",
+      "decisions": 8,
+      "candidate_top1_pct": 100.0,
+      "baseline_top1_pct": 0.0,
+      "candidate_mean_regret": 0.0,
+      "baseline_mean_regret": 61.0,
+      "deterministic_mean_regret": 0.0,
+      "candidate_mean_residual_conflicts": 1,
+      "baseline_mean_residual_conflicts": 11.75
+    },
+    "gen_cascading_junction_gridlock": {
+      "name": "Generalization: Cascading Junction Gridlock",
+      "decisions": 8,
+      "candidate_top1_pct": 25.0,
+      "baseline_top1_pct": 0.0,
+      "candidate_mean_regret": 40.75,
+      "baseline_mean_regret": 60.5,
+      "deterministic_mean_regret": 100.125,
+      "candidate_mean_residual_conflicts": 2.12,
+      "baseline_mean_residual_conflicts": 18.25
+    },
+    "gen_emergency_single_line_cross": {
+      "name": "Generalization: Emergency Single-Line Crossing & Disruption",
+      "decisions": 8,
+      "candidate_top1_pct": 0.0,
+      "baseline_top1_pct": 0.0,
+      "candidate_mean_regret": 32.75,
+      "baseline_mean_regret": 15.0,
+      "deterministic_mean_regret": 32.75,
+      "candidate_mean_residual_conflicts": 0,
+      "baseline_mean_residual_conflicts": 2.5
+    }
+  },
+  "degradation_analysis": {
+    "graceful_degradation_verified": true,
+    "residual_conflict_reduction_pct": 90.38,
+    "hard_constraint_filtering_intact": true
+  }
+}

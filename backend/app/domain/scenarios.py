@@ -574,10 +574,7 @@ def build_train(spec: TrainSpec, network: Network) -> dict:
     }
 
 
-def build_scenario(key: str, network: Network | None = None) -> dict:
-    if key not in SCENARIO_MAP:
-        raise KeyError(f"Unknown scenario '{key}'")
-    spec = SCENARIO_MAP[key]
+def build_scenario_from_spec(spec: ScenarioSpec, network: Network | None = None) -> dict:
     network = network or build_default_network()
     closures, outages, restrictions = _materialise_disruptions(spec)
     trains = [build_train(train, network) for train in spec.trains]
@@ -610,3 +607,9 @@ def build_scenario(key: str, network: Network | None = None) -> dict:
             for disruption in spec.disruptions
         ],
     }
+
+
+def build_scenario(key: str, network: Network | None = None) -> dict:
+    if key not in SCENARIO_MAP:
+        raise KeyError(f"Unknown scenario '{key}'")
+    return build_scenario_from_spec(SCENARIO_MAP[key], network=network)

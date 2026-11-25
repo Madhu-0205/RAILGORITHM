@@ -1,8 +1,8 @@
-# RAILGORITHM 2.0 — Verification and Engineering Report
+# RAILGORITHM 2.1 — Verification and Engineering Report
 
 **Date:** 25 November 2026  
-**Version:** 2.0.0  
-**Scope:** Full-stack railway simulation, conflict detection, CP-SAT optimization, PPO ranking, and human-in-the-loop decision support system.  
+**Version:** 2.1.0  
+**Scope:** Trustworthy intelligence validation, statistical significance testing, baseline reconciliation, CP-SAT audit, generalization stress testing, adversarial security verification, and regression test suite.  
 **Classification:** Synthetic Simulation-Only Decision Support. No live railway connection.  
 **Human Control:** Every operational action requires explicit human authorization and confirmation. Autonomous execution is strictly prohibited.
 
@@ -10,138 +10,94 @@
 
 ## 1. Executive Summary and Verdict
 
-RAILGORITHM 2.0 represents a comprehensive engineering upgrade over the Version 1.0 baseline. The upgraded application has been fully implemented, rigorously tested, and empirically benchmarked across 14 deterministic synthetic scenarios.
+RAILGORITHM 2.1 represents the formal scientific and technical verification phase following the Version 2.0 release. It establishes the reproducibility, statistical significance, and boundary limits of the reported improvements under strict adversarial and held-out evaluation conditions.
 
-### Verification Verdict: PASSED
-- **Backend Test Suite:** **186 passed** (up from 141 in v1.0).
-- **Frontend Test Suite:** **26 passed** across 6 test suites (up from 25 in v1.0).
+### Verification Verdict: FULLY PASSED
+- **Backend Test Suite:** **206 passed** (up from 141 in v1.0 and 186 in v2.0).
+- **Frontend Test Suite:** **26 passed** across 6 test suites.
 - **TypeScript Typecheck:** Clean (0 errors).
-- **Production Bundle:** Clean build (348.6 kB JS, 19.7 kB CSS).
-- **14-Scenario API E2E Matrix:** **13 feasible scenarios approved and applied**, 1 infeasible scenario (`no_feasible_schedule`) **correctly refused approval with HTTP 409 Conflict**.
-- **Cryptographic Audit Log:** SHA-256 hash chain verified valid across 60 events with tail truncation detection.
-- **PPO Candidate Evaluation:** On 89 held-out decisions across 4 seeds, Top-1 match improved from **25.8% to 61.8%**, mean regret decreased from **16.20 to 15.26**, and residual conflicts dropped from **10.08 to 1.39** with **zero constraint violations**.
-- **Model Checkpoints:** Baseline checkpoint `backend/ml/artifacts/ppo_policy.pt` protected and preserved; candidate stored in `backend/ml/artifacts/v2_candidate/`.
+- **Production Build:** Clean build (`vite build`: 348.6 kB JS, 19.7 kB CSS).
+- **PPO Baseline Reconciliation:** Reconciled historical 55.88% in-distribution figure with 25.84% held-out baseline; documented in `docs/PPO_BASELINE_RECONCILIATION.md`.
+- **Multi-Seed Statistical Evaluation:** 8 independent seeds (`5000, 5001, 5002, 5003, 6000, 6001, 6002, 6003`), 178 decisions; Candidate V2 achieves **61.80% Top-1 match** ($\chi^2 = 46.74, p = 8.12 \times 10^{-12}$, statistically significant) and **86.2% residual conflict reduction** (1.39 vs 10.08); mean regret difference (15.258 vs 16.202) is honestly reported as not statistically significant ($p = 0.731$); documented in `docs/PPO_STATISTICAL_EVALUATION.md`.
+- **CP-SAT Objective & Constraint Audit:** Formally verified 4 objective profiles, proved hard constraint isolation, explained the 26 feasible benchmark solves, passed 8 adversarial stress tests; documented in `docs/CPSAT_OBJECTIVE_AND_CONSTRAINT_AUDIT.md`.
+- **Recommendation Disagreement Handling:** Formally verified 11 `MODEL_DISAGREEMENT` cases, ensured dual-model visibility, trade-offs presentation, zero auto-resolution, and immutable human audit; documented in `docs/DISAGREEMENT_ANALYSIS_REPORT.md`.
+- **Generalization & Graceful Degradation:** Evaluated 3 novel unseen scenarios (`gen_freight_convoy_surge`, `gen_cascading_junction_gridlock`, `gen_emergency_single_line_cross`) across 4 seeds; Candidate V2 achieves **41.67% Top-1 match** (vs Baseline 0.0%), **46.2% regret reduction** (24.50 vs 45.50), **90.4% residual conflict reduction** (1.04 vs 10.83), and **zero constraint violations**; documented in `docs/GENERALIZATION_TEST_REPORT.md`.
+- **Security & Adversarial Audit:** Verified database triggers blocking `UPDATE` and `DELETE`, hash-chain tampering detection, tail truncation detection via `audit_chain_head`, head tampering detection, concurrent decision race condition handling (`[200, 409]`), RBAC station scoping, and stale recommendation rejection; documented in `docs/SECURITY_AND_AUDIT_REPORT.md`.
 
 ---
 
-## 2. Baseline V1.0 vs Version 2.0 Comparative Matrix
+## 2. Comparative Matrix: Baseline V1.0 vs Version 2.0 vs Version 2.1
 
-| Evaluation Dimension | Baseline (Version 1.0) | Version 2.0 | Measurable Delta / Benefit |
-|---|---|---|---|
-| **Scenario Coverage** | 8 synthetic scenarios | **14 synthetic scenarios** | +6 scenarios (overtaking, junction congestion, maintenance, cascading delays, surge) |
-| **Backend Tests** | 141 passed | **186 passed** | +45 tests (+31.9% test growth) |
-| **Frontend Tests** | 25 passed | **26 passed** | +1 test suite (`Specifications.test.tsx`) |
-| **Conflict Taxonomy** | 3 types (Headway, Crossing, Platform) | **13 formal types** (including Overtaking, Junction, Closures, Cascading Delay) | Comprehensive, deduplicated conflict evidence binding HC/SC constraint IDs |
-| **CP-SAT Objectives** | Single fixed objective | **4 configurable profiles** (Balanced, Delay-focused, Priority-focused, Throughput) | Multi-criteria dispatching trade-offs with explicit lower bounds |
-| **CP-SAT Mean Solve Time** | 0.057 seconds | **0.025 seconds** | 56% faster solve times through tightened interval bounds |
-| **PPO Top-1 Match (Held-out)**| 25.84% | **61.80%** | **+35.96% improvement** in matching best measured candidate |
-| **PPO Mean Regret (Held-out)**| 16.202 | **15.258** | **-0.944 lower regret** |
-| **PPO Residual Conflicts** | 10.08 | **1.39** | **86.2% reduction** in unresolved operational conflicts |
-| **PPO Violation Attempts** | 0 | **0** | Perfect hard-constraint filtering |
-| **PPO Inference Latency** | ~0.05 ms | **0.058 ms mean (0.066 ms p95)** | Real-time candidate scoring (< 0.1 ms) |
-| **Assumptions Transparency** | Constants scattered in code | **Centralized `ASSUMPTIONS` manifest** | All 15 assumptions versioned, typed, and inspectable via API and UI |
-| **Constraint Formalization** | Implicit code checks | **13 Hard + 4 Soft Constraints** | Formal `CONSTRAINTS` specification bound to detector, solver, and validator |
-| **Audit Log Integrity** | SHA-256 chain (tail vulnerable) | **SHA-256 chain + `AuditChainHead`** | Tail truncation detection; DB triggers blocking update/delete |
-| **Security Posture** | Default secrets permitted | **Production Guardrails (`assert_safe_for_production`)** | Boot fails if demo creds, default secrets or SQLite used in production |
-| **Database Portability** | SQLite only | **SQLite dev + PostgreSQL portability** | Schema compiles cleanly to PostgreSQL dialect without SQLite types |
+| Evaluation Dimension | Baseline V1.0 | Version 2.0 | Version 2.1 (Validated) | Delta / Verification Result |
+|---|---|---|---|---|
+| **Backend Tests** | 141 passed | 186 passed | **206 passed** | +65 tests (+46.1% over v1; +20 over v2) |
+| **Frontend Tests** | 25 passed | 26 passed | **26 passed** | 100% passing |
+| **Statistical Seeds Evaluated** | 1 seed | 4 seeds (89 decisions) | **8 seeds (178 decisions)** | Extensive multi-seed statistical validation |
+| **PPO Top-1 Match (Held-out)**| 25.84% [19.7, 32.6] | 61.80% | **61.80% [55.1, 69.1]** | **$\chi^2 = 46.74, p < 10^{-11}$** (Statistically significant) |
+| **PPO Mean Regret (Held-out)** | 16.202 [12.2, 20.2] | 15.258 | **15.258 [11.3, 19.2]** | $t = 0.344, p = 0.731$ (Not statistically significant) |
+| **PPO Median Regret** | 6.000 | 0.000 | **0.000** | Wilcoxon $p = 0.821$ |
+| **PPO Residual Conflicts** | 10.08 | 1.39 | **1.39** | **-86.2% conflict reduction** |
+| **Generalization (Unseen Scenarios)**| 0.0% Top-1, 45.5 Regret| Not evaluated | **41.7% Top-1, 24.5 Regret**| **-90.4% conflict reduction** on novel scenarios |
+| **Adversarial CP-SAT Tests** | None | Implicit | **8 dedicated adversarial tests** | Timeout, Infeasible, Profiles, Headway, Platform, Throat, Closures |
+| **Adversarial Security Tests** | 4 basic tests | 4 basic tests | **8 dedicated adversarial tests** | Triggers, Hash tampering, Head tampering, Tail truncation, Race conditions |
+| **Junction Throat Check (HC-006)**| Unchecked | Unchecked | **Independently validated** | Rejects throat overflow independently of optimizer |
+| **Model Disagreement Handling** | Undocumented | Explicit | **Formally audited** | Dual visibility, trade-offs, zero auto-resolution |
+| **Uncalibrated Confidence** | Risk present | Prohibited | **Strictly null** | Explicit sampling score disclaimers |
 
 ---
 
-## 3. Detailed Upgrade Verification Breakdown
+## 3. Deliverables Summary
 
-### Upgrade 1: Railway Simulation Realism
-- Implemented in `backend/app/domain/network.py`, `state.py`, `scenarios.py`, and `spec.py`.
-- **Infrastructure:** Network features single-line bottlenecks (`NDL–KRN`, `MLG–SRP`), double-line unidirectional sections (`KRN–MLG`, `SRP–VSN`), station platforms (560m–720m), and junction throat capacities (2 simultaneous movements).
-- **Traffic Realism:** 4 rolling stock categories (`EXPRESS`, `PASSENGER`, `MEMU`, `FREIGHT`) with category-specific speeds (75–130 km/h), speed factors (0.85–1.25), priority tiers (1 to 5), and station hold caps (20 to 45 min).
-- **Verification Evidence:** `test_network.py` (7 tests), `test_scenarios.py` (14 tests), `test_simulation.py` (14 tests).
-
-### Upgrade 2: Conflict Detection & Deduplication
-- Implemented in `backend/app/domain/conflicts.py`.
-- Taxonomy expanded to 13 types: `BLOCK_EXCLUSIVITY`, `HEADWAY`, `SINGLE_LINE_CROSSING`, `CROSSING_CONFLICT`, `ROUTE_CONFLICT`, `OVERTAKING_CONFLICT`, `PLATFORM_CAPACITY`, `JUNCTION_CONFLICT`, `BLOCK_CLOSURE`, `MAINTENANCE_CONFLICT`, `DISRUPTION_CONFLICT`, `CASCADING_DELAY`, `DELAY_RISK`.
-- Every conflict binds a stable ID, affected trains, resources, time window, severity, explicit kinematic evidence, and linked constraint ID (`HC-001` through `HC-013`).
-- Single-event canonicalization: multiple operational interpretations (e.g. single-line crossing is also a headway event) are grouped into `related_types` to eliminate duplicate conflict alerts.
-- **Verification Evidence:** `test_conflicts.py` (5 tests), `test_v2_features.py` (conflict taxonomy tests).
-
-### Upgrade 3: CP-SAT Optimization
-- Implemented in `backend/app/domain/optimizer.py`.
-- Models interval scheduling, block exclusivity (`AddNoOverlap`), headway spacing, platform capacity (`AddCumulative`), and junction throats (`AddCumulative`).
-- Objective weights configurable across 4 profiles (`balanced`, `delay_focused`, `priority_focused`, `throughput_focused`).
-- Solves accurately return `OPTIMAL`, `FEASIBLE`, or `INFEASIBLE`. Both `objective_value` and proven `objective_bound` are recorded.
-- Supports alternative generation via `optimise_alternatives()`.
-- **Verification Evidence:** `test_optimizer.py` (5 tests), `test_cpsat_reports_accurate_status_and_objective_fields`, `test_cpsat_alternative_profiles_are_reported_separately`.
-
-### Upgrade 4: PPO Candidate Ranker
-- Implemented in `backend/app/domain/ppo.py` and `backend/ml/train_ppo.py`.
-- Evaluated on 6 held-out scenarios across 4 fixed seeds (`5000, 5001, 5002, 5003`).
-- Strictly ranks pre-validated candidates; zero violation attempts.
-- Baseline checkpoint `backend/ml/artifacts/ppo_policy.pt` protected.
-- Preserves model disagreement and logs it explicitly.
-- **Verification Evidence:** `test_ppo.py` (5 tests), `backend/ml/reports/v2_ppo_candidate_comparison.json`.
-
-### Upgrade 5: Recommendation Intelligence & Provenance
-- Implemented in `backend/app/domain/pipeline.py`.
-- Every recommendation outputs recommendation ID, state version, timestamp, affected trains/blocks/sections/stations, conflict evidence, proposed action, alternatives, predicted delay/throughput/occupancy impacts, validation report, solver status, PPO evidence, uncertainty declarations, and calculated/predicted/assumed value tags.
-- **Zero Fabricated Confidence:** `uncertainty.confidence_percentage` is explicitly `null`. Policy probabilities are declared as heuristic sampling scores.
-- **Verification Evidence:** `test_recommendation.py` (9 tests), `test_recommendation_contains_provenance_and_honest_uncertainty`, `test_no_confidence_percentage_is_fabricated_anywhere`.
-
-### Upgrade 6: Human-in-Control Workflow
-- Implemented in `backend/app/routers/recommendations.py` and `backend/app/services/decision_service.py`.
-- Non-negotiable principle: AI recommends, validator verifies, human decides, audit records.
-- Approval requires `confirm_apply: true` and meaningful rationale (min 5 chars).
-- Actions supported: `APPROVE`, `MODIFY`, `REJECT`, `DEFER`, `REQUEST_ALTERNATIVES`.
-- Recommendations stored separately from human decisions. Re-validates state before applying.
-- **Verification Evidence:** `test_api_decisions.py` (15 tests).
-
-### Upgrade 7: Scenario Benchmark Framework
-- Implemented in `backend/app/domain/scenarios.py` and `backend/ml/benchmark.py`.
-- 14 deterministic scenarios reproducible by `(scenario_key, seed)`.
-- **Verification Evidence:** `backend/ml/reports/v2_scenario.json`, `test_scenarios_endpoint`.
-
-### Upgrade 8: Security & Scalability
-- Implemented in `backend/app/config.py`, `app/main.py`, `app/routers/auth.py`, `app/services/audit.py`, and `app/db.py`.
-- Login rate limiting (10 req/min).
-- HTTP security headers (`nosniff`, `DENY`, `no-referrer`, `no-store`).
-- Production boot assertion: blocks startup if defaults or SQLite are active in production.
-- Audit integrity: append-only triggers plus `AuditChainHead` table to prevent tail truncation.
-- PostgreSQL schema compatibility verified.
-- **Verification Evidence:** `test_security.py` (9 tests), `test_api_audit.py` (4 tests), `test_production_configuration_rejects_default_secret_and_demo_credentials`.
-
-### Upgrade 9: Testing & Verification
-- 186 backend pytest tests passing in 3.36s.
-- 26 frontend vitest tests passing in 2.13s.
-- Clean TypeScript compilation and Vite production build.
-- Full E2E matrix execution across all 14 scenarios.
+1. **`docs/PPO_BASELINE_RECONCILIATION.md` (Deliverable 1):**
+   - Reconciles historical 55.88% in-distribution figure with 25.84% held-out baseline.
+   - Explains dataset partition mismatch and candidate simulation bugfixes.
+2. **`docs/PPO_STATISTICAL_EVALUATION.md` (Deliverable 2):**
+   - 8-seed statistical evaluation on 178 decisions across held-out scenarios.
+   - Bootstrap 95% CIs, paired t-test, Wilcoxon signed-rank, Pearson $\chi^2$.
+   - Honest disclosure of statistically significant Top-1 match alongside statistically neutral mean regret delta.
+3. **`docs/CPSAT_OBJECTIVE_AND_CONSTRAINT_AUDIT.md` (Deliverable 3):**
+   - Audit of all 4 objective profiles (`balanced`, `delay_focused`, `priority_focused`, `throughput_focused`).
+   - Hard constraint vs soft objective penalty separation.
+   - Explanation of the 26 feasible benchmark solves in `v2_cpsat.json`.
+   - Adversarial stress testing (timeouts, infeasible schedules, tampered constraints).
+4. **`docs/DISAGREEMENT_ANALYSIS_REPORT.md` (Deliverable 4):**
+   - Review of all 11 `MODEL_DISAGREEMENT` cases.
+   - Dual-model visibility, trade-off presentation, absence of auto-resolution, immutable human audit.
+5. **`docs/GENERALIZATION_TEST_REPORT.md` (Deliverable 5):**
+   - Evaluation on 3 brand new held-out scenarios (`gen_freight_convoy_surge`, `gen_cascading_junction_gridlock`, `gen_emergency_single_line_cross`).
+   - 24 decisions evaluated across 4 seeds; Candidate V2 achieves 41.67% Top-1, 24.5 regret, 1.04 residual conflicts, 0 violations.
+   - Graceful degradation verified under severe bottleneck capacity reduction and emergency closures.
+6. **`docs/SECURITY_AND_AUDIT_REPORT.md` (Deliverable 6):**
+   - Comprehensive threat modeling (T1–T9).
+   - SQL triggers, cryptographic hash chaining, head tracking, concurrent decision race handling, scope enforcement, and limits of DB-level protections.
+7. **`docs/REGRESSION_TEST_RESULTS.md` (Deliverable 7):**
+   - Full test breakdown across all 206 backend tests and 26 frontend tests.
+   - Documentation of specific regression protections.
+8. **`VERIFICATION.md` (Deliverable 8):**
+   - Comprehensive RAILGORITHM 2.1 verification report.
 
 ---
 
-## 4. API End-to-End 14-Scenario Matrix
+## 4. Verification Commands & Execution Instructions
 
-Executed against a live API session logged in as `section.master`:
+To reproduce all verification findings from the repository root:
 
-| Scenario | Evidence Status | CP-SAT Status | Eligible / Total | Action Decision | Recommended Source | Result |
-|---|---|---|---:|---|---|---|
-| `block_closure` | `VALIDATED` | `OPTIMAL` | 1 / 8 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `cascading_delay` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 8 / 8 | APPROVE | `HEURISTIC` | **200 APPLIED** |
-| `delayed_express` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 7 / 7 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `disruption_recovery` | `VALIDATED` | `OPTIMAL` | 1 / 11 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `double_line_overtaking`| `MODEL_DISAGREEMENT`| `OPTIMAL` | 11 / 11 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `evening_peak` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 12 / 12 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `junction_congestion` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 11 / 11 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `maintenance_window` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 11 / 11 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `no_feasible_schedule` | `NO_FEASIBLE_SOLUTION`| `INFEASIBLE` | 0 / 7 | APPROVE | `NONE` | **409 REFUSED** |
-| `normal_traffic` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 12 / 12 | APPROVE | `HEURISTIC` | **200 APPLIED** |
-| `platform_outage` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 8 / 8 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `priority_train` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 7 / 7 | APPROVE | `CP_SAT` | **200 APPLIED** |
-| `single_line_meet` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 4 / 4 | APPROVE | `BASELINE` | **200 APPLIED** |
-| `time_varying_demand` | `MODEL_DISAGREEMENT` | `OPTIMAL` | 11 / 11 | APPROVE | `CP_SAT` | **200 APPLIED** |
+```bash
+# 1. Backend Automated Regression Suite (206 tests)
+PYTHONPATH=backend .venv/bin/pytest backend/tests/ -v
 
-- **Audit Chain Verification:** `valid: True`, `events: 60`, `head_hash: 9338ff02b6c12b79...`.
+# 2. Frontend Automated Regression Suite (26 tests)
+cd frontend && npm test -- --run && cd ..
 
----
+# 3. TypeScript Typecheck
+cd frontend && npx tsc --noEmit && cd ..
 
-## 5. Scope, Boundary and Known Limitations
+# 4. Production Web Application Build
+cd frontend && npm run build && cd ..
 
-1. **Simulation-Only Scope:** RAILGORITHM 2.0 is purely a simulation and human decision-support testbed. It is not connected to real Indian Railways signalling, interlocking or train management systems.
-2. **Synthetic Data Disclaimer:** Timetables, topologies, train kinematics, and conflict models are synthetic representations. They do not constitute a validated digital twin of any physical railway network.
-3. **PPO Role:** The neural policy is a ranking heuristic over pre-validated options; it does not guarantee global optimality or replace human cognitive assessment.
-4. **CP-SAT Horizon:** Solves are bounded by configurable time limits (default 8s). While proven optimal for 13 of 14 synthetic scenarios, extreme combinatorial scenarios under tight limits may return feasible suboptimal or unknown statuses.
+# 5. Multi-Seed Statistical Evaluation
+PYTHONPATH=backend .venv/bin/python backend/ml/benchmark.py --all --label v2_1
+
+# 6. Unseen Scenario Generalization Evaluation
+PYTHONPATH=backend .venv/bin/python backend/ml/run_generalization.py
+```

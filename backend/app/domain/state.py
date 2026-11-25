@@ -13,7 +13,7 @@ import copy
 from typing import Any
 
 from .network import Network
-from .scenarios import build_scenario
+from .scenarios import ScenarioSpec, build_scenario, build_scenario_from_spec
 
 
 class SimulationError(ValueError):
@@ -124,8 +124,13 @@ def _available_platform_count(state: dict, station_id: str, at_min: int) -> int:
     )
 
 
-def initialise_state(scenario_key: str, *, seed_override: int | None = None) -> dict:
-    scenario = build_scenario(scenario_key)
+def initialise_state(
+    scenario_key: str | ScenarioSpec, *, seed_override: int | None = None
+) -> dict:
+    if isinstance(scenario_key, str):
+        scenario = build_scenario(scenario_key)
+    else:
+        scenario = build_scenario_from_spec(scenario_key)
     network = Network.from_dict(scenario["network"])
     start = scenario["start_time_min"]
     state: dict = {

@@ -523,24 +523,59 @@ def validate_schedule(state: dict, schedule: dict) -> dict:
                     }
                 )
 
-    # Junction throat capacity (configured as 2 simultaneous movements).
+    # Junction throat capacity (configured throat capacity, HC-006).
     for station in network.stations:
         if not station.is_junction:
             continue
+        throat_cap = int(station.junction_throat_capacity or 2)
         windows = station_windows.get(station.id, [])
-        for left, right in combinations(sorted(windows, key=lambda w: w["arrival_min"]), 2):
-            if left["train_id"] == right["train_id"]:
-                continue
-            if abs(left["arrival_min"] - right["arrival_min"]) < 1:
+        throat_events: list[tuple[int, int, str]] = []
+        for w in windows:
+            arr = int(w["arrival_min"])
+            throat_events.append((arr - 1, 1, w["train_id"]))
+            throat_events.append((arr + 1, -1, w["train_id"]))
+        throat_events.sort(key=lambda event: (event[0], -event[1]))
+        concurrent_trains: set[str] = set()
+        throat_failed = False
+        for t_min, delta, tr_id in throat_events:
+            if delta == 1:
+                concurrent_trains.add(tr_id)
+            else:
+                concurrent_trains.discard(tr_id)
+            if len(concurrent_trains) > throat_cap:
                 checks.append(
                     _check(
-                        f"junction_{station.id}_{left['train_id']}_{right['train_id']}",
+                        f"throat_{station.id}_{t_min}",
                         "Junction throat capacity",
-                        "WARN",
-                        f"Simultaneous arrivals at {station.name} throat; verify interlocking.",
-                        hard=False,
+                        "FAIL",
+                        f"{len(concurrent_trains)} concurrent movements exceed throat capacity {throat_cap} at {station.name}",
+                        hard=True,
                     )
                 )
+                violations.append(
+                    {
+                        "kind": "JUNCTION_THROAT_CAPACITY",
+                        "station_id": station.id,
+                        "time_min": t_min,
+                        "trains": sorted(concurrent_trains),
+                    }
+                )
+                throat_failed = True
+                break
+        if not throat_failed:
+            for left, right in combinations(sorted(windows, key=lambda w: w["arrival_min"]), 2):
+                if left["train_id"] == right["train_id"]:
+                    continue
+                if abs(left["arrival_min"] - right["arrival_min"]) < 1:
+                    checks.append(
+                        _check(
+                            f"junction_{station.id}_{left['train_id']}_{right['train_id']}",
+                            "Junction throat capacity",
+                            "WARN",
+                            f"Simultaneous arrivals at {station.name} throat; verify interlocking.",
+                            hard=False,
+                        )
+                    )
 
     # Priority policy is soft and never replaces hard safety constraints.
     active_trains = [trains[train_id] for train_id in active_ids if train_id in trains]
