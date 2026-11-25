@@ -137,9 +137,9 @@ export function DashboardPage() {
             <KpiCard
               label="Schedule Adherence"
               value={numberOrDash(stationKpiData.kpis.schedule_adherence_pct)}
-              unit="%"
-              hint="trains within 5 min of schedule"
-              tone={stationKpiData.kpis.schedule_adherence_pct < 75 ? "watch" : "good"}
+              unit={stationKpiData.kpis.schedule_adherence_pct !== null ? "%" : ""}
+              hint={stationKpiData.kpis.schedule_adherence_pct === null ? "no trains in observation window" : "trains within 5 min of schedule"}
+              tone={stationKpiData.kpis.schedule_adherence_pct === null ? "neutral" : stationKpiData.kpis.schedule_adherence_pct < 75 ? "watch" : "good"}
             />
             <KpiCard
               label="Platform Availability"

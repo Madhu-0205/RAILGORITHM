@@ -184,3 +184,37 @@ class ModelVersion(Base):
     )
 
     __table_args__ = (UniqueConstraint("name", "version", name="uq_model_version"),)
+
+
+class ProcessedEventRecord(Base):
+    """Durable record of an acknowledged and applied movement event.
+
+    Guarantees idempotency across process restarts and beyond bounded in-memory LRU eviction.
+    """
+    __tablename__ = "processed_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    feed_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    sequence_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("feed_id", "sequence_num", name="uq_feed_sequence"),
+        Index("ix_processed_feed_seq", "feed_id", "sequence_num"),
+    )
+
+
+class FeedCheckpointRecord(Base):
+    """Persistent sequence and watermark checkpoint per telemetry feed."""
+    __tablename__ = "feed_checkpoints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    feed_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    last_processed_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_processed_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+

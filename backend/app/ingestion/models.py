@@ -111,7 +111,7 @@ class ContradictionRecord(BaseModel):
     train_id: str | None
     feed_id: str
     description: str
-    rule_reference: str = "IR-G&SR-GENERIC"
+    rule_reference: str = "OPERATIONAL-VALIDATION-RECORD"
     offending_payload: dict[str, Any]
     prior_state: dict[str, Any] | None = None
     detected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -124,7 +124,7 @@ class IngestionValidationResult(BaseModel):
     reason_code: ValidationReasonCode = "VALID_EVENT"
     event: NormalizedMovementEvent | None = None
     message: str
-    rule_reference: str = "IR-G&SR-VALID"
+    rule_reference: str = "TELEMETRY-VALID"
     contradiction: ContradictionRecord | None = None
     sequence_gap_detected: bool = False
     gap_size: int = 0

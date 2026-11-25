@@ -55,8 +55,10 @@ def test_station_master_kpis_ground_truth_calculation():
     if len(monitored) > 0:
         expected_adherence = round(100.0 * kpis["on_time_trains"] / len(monitored), 1)
         assert kpis["schedule_adherence_pct"] == expected_adherence
+        assert kpis["adherence_status"] == "NORMAL"
     else:
-        assert kpis["schedule_adherence_pct"] == 100.0
+        assert kpis["schedule_adherence_pct"] is None
+        assert kpis["adherence_status"] == "NO_DATA"
 
     # Platform slots
     slots = res["platform_slots"]
@@ -79,8 +81,11 @@ def test_station_master_empty_station_missing_data_behavior():
     assert kpis["trains_monitored"] == 0
     assert kpis["on_time_trains"] == 0
     assert kpis["delayed_trains"] == 0
-    # No monitored trains -> schedule adherence defaults to 100.0% without division-by-zero
-    assert kpis["schedule_adherence_pct"] == 100.0
+    # No monitored trains -> schedule adherence is None (NO_DATA), never misleading 100.0%
+    assert kpis["schedule_adherence_pct"] is None
+    assert kpis["adherence_status"] == "NO_DATA"
+    assert "No trains" in kpis["adherence_explanation"]
+    assert kpis["punctuality_threshold_min"] == 5
     assert kpis["average_arrival_delay_min"] == 0.0
     assert kpis["average_departure_delay_min"] == 0.0
     assert kpis["platform_availability_pct"] == 100.0

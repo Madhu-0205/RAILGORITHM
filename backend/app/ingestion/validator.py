@@ -53,14 +53,24 @@ class IngestionValidator:
         self._block_entry_times: dict[str, datetime] = {}
         # Active throat transits at Malgaon Junction (MLG)
         self._active_throat_transits: set[str] = set()
+        # Verified train Working Time Table (WTT) specifications
+        self._train_wtt_specs: dict[str, dict[str, Any]] = {}
 
     def set_tsr(self, location_id: str, speed_limit_kmph: float) -> None:
-        """Configure a Temporary Speed Restriction (TSR) for a block or section."""
+        """Configure a Temporary Speed Restriction (TSR) for a block or section under GR 4.09."""
         self._tsr_map[location_id] = speed_limit_kmph
 
     def clear_tsr(self, location_id: str) -> None:
         """Clear a Temporary Speed Restriction."""
         self._tsr_map.pop(location_id, None)
+
+    def register_train_wtt_mps(self, train_id: str, max_speed_kmph: float, source_reference: str = "WTT-TIMETABLE-MPS") -> None:
+        """Register verified train Working Time Table (WTT) Maximum Permissible Speed."""
+        self._train_wtt_specs[train_id] = {
+            "max_speed_kmph": float(max_speed_kmph),
+            "source": source_reference,
+            "is_verified_wtt": True,
+        }
 
     def _fingerprint(self, raw: RawFeedPayload) -> str:
         data = f"{raw.feed_id}:{raw.sequence_num}:{raw.train_id}:{raw.event_type}:{raw.location_id}:{raw.timestamp}"
@@ -82,46 +92,61 @@ class IngestionValidator:
         self._active_occupancies.clear()
         self._block_entry_times.clear()
         self._active_throat_transits.clear()
+        self._train_wtt_specs.clear()
 
-    def _get_train_max_speed(self, train_id: str, train_type: str | None) -> float:
-        """Determine permitted maximum speed for a specific train category."""
+    def _get_train_max_speed(self, train_id: str, train_type: str | None) -> tuple[float, str]:
+        """Determine permitted maximum speed and statutory/configuration source for a train.
+
+        Derivation precedence:
+        1. Explicit WTT train registration (timetable/config).
+        2. Configured rolling-stock category specification from self._train_type_specs.
+        3. Fallback unverified simulation assumption.
+        """
+        if train_id in self._train_wtt_specs:
+            return float(self._train_wtt_specs[train_id]["max_speed_kmph"]), self._train_wtt_specs[train_id]["source"]
+
         if train_type and train_type in self._train_type_specs:
-            return float(self._train_type_specs[train_type].get("max_speed_kmph", MAX_ABSOLUTE_TRAIN_SPEED_KMPH))
-        
+            mps = float(self._train_type_specs[train_type].get("max_speed_kmph", MAX_ABSOLUTE_TRAIN_SPEED_KMPH))
+            return mps, f"CONFIG-ROLLING-STOCK-{train_type}"
+
         # Heuristic based on train ID prefix if train_type is not explicitly provided
         upper_id = train_id.upper()
         if upper_id.startswith("FRT") or upper_id.startswith("GOODS") or "FREIGHT" in upper_id:
-            return float(self._train_type_specs.get("FREIGHT", {}).get("max_speed_kmph", 75.0))
+            return float(self._train_type_specs.get("FREIGHT", {}).get("max_speed_kmph", 75.0)), "SIM-FALLBACK-FREIGHT-MPS"
         elif upper_id.startswith("MEMU") or upper_id.startswith("SUB"):
-            return float(self._train_type_specs.get("MEMU", {}).get("max_speed_kmph", 90.0))
+            return float(self._train_type_specs.get("MEMU", {}).get("max_speed_kmph", 90.0)), "SIM-FALLBACK-MEMU-MPS"
         elif upper_id.startswith("PAS") or upper_id.startswith("ORD"):
-            return float(self._train_type_specs.get("PASSENGER", {}).get("max_speed_kmph", 100.0))
+            return float(self._train_type_specs.get("PASSENGER", {}).get("max_speed_kmph", 100.0)), "SIM-FALLBACK-PASSENGER-MPS"
         elif upper_id.startswith("EXP") or upper_id.startswith("SF") or upper_id.startswith("RAJ"):
-            return float(self._train_type_specs.get("EXPRESS", {}).get("max_speed_kmph", 130.0))
-        
-        return MAX_ABSOLUTE_TRAIN_SPEED_KMPH
+            return float(self._train_type_specs.get("EXPRESS", {}).get("max_speed_kmph", 130.0)), "SIM-FALLBACK-EXPRESS-MPS"
 
-    def _get_location_speed_limit(self, location_id: str) -> tuple[float, str]:
-        """Determine permitted speed limit for a section, block, or platform including TSRs."""
-        # 1. Check TSR first
+        return MAX_ABSOLUTE_TRAIN_SPEED_KMPH, "SIM-ASSUMPTION-MAX-CORRIDOR-CEILING"
+
+    def _get_location_speed_limit(self, location_id: str) -> tuple[float, str, str]:
+        """Determine permitted speed limit, reason code, and regulatory rule citation.
+
+        Returns:
+            (limit_kmph, reason_code, rule_reference)
+        """
+        # 1. Check Caution Order / TSR first (GR 4.09)
         if location_id in self._tsr_map:
-            return self._tsr_map[location_id], "TSR_SPEED_LIMIT_EXCEEDED"
+            return self._tsr_map[location_id], "TSR_SPEED_LIMIT_EXCEEDED", "GR-4.09-TSR-CAUTION-ORDER"
 
-        # 2. Check Section speed limit
+        # 2. Check Section speed limit (WTT Sanctioned Sectional MPS)
         try:
             if location_id in self._network.block_map:
                 sec = self._network.section_for_block(location_id)
-                return float(sec.max_speed_kmph), "SECTION_SPEED_LIMIT_EXCEEDED"
+                return float(sec.max_speed_kmph), "SECTION_SPEED_LIMIT_EXCEEDED", "WTT-SECTIONAL-MPS"
             elif location_id in self._network.section_map:
                 sec = self._network.section_map[location_id]
-                return float(sec.max_speed_kmph), "SECTION_SPEED_LIMIT_EXCEEDED"
+                return float(sec.max_speed_kmph), "SECTION_SPEED_LIMIT_EXCEEDED", "WTT-SECTIONAL-MPS"
             elif location_id in self._network.station_map:
-                # Station yard turnout speed limit
-                return 30.0, "SECTION_SPEED_LIMIT_EXCEEDED"
+                # Station yard turnout speed limit under Schedule of Dimensions (SOD)
+                return 30.0, "SECTION_SPEED_LIMIT_EXCEEDED", "IR-SOD-TURNOUT-SPEED"
         except Exception:
             pass
 
-        return MAX_ABSOLUTE_TRAIN_SPEED_KMPH, "PHYSICAL_IMPOSSIBILITY"
+        return MAX_ABSOLUTE_TRAIN_SPEED_KMPH, "PHYSICAL_IMPOSSIBILITY", "SIM-ASSUMPTION-CORRIDOR-CEILING"
 
     def validate_and_normalize(self, raw: RawFeedPayload) -> IngestionValidationResult:
         t0 = time.perf_counter()
@@ -265,14 +290,14 @@ class IngestionValidator:
                 train_id=None,
                 feed_id=raw.feed_id,
                 description=f"Event type '{raw.event_type}' requires a non-empty train_id.",
-                rule_reference="IR-G&SR-TRAIN-ID-MANDATORY",
+                rule_reference="OPERATIONAL-IDENTIFIER-MANDATORY",
                 offending_payload=raw.model_dump(mode="json"),
             )
             return IngestionValidationResult(
                 status="SCHEMA_ERROR",
                 reason_code="MISSING_REQUIRED_FIELD",
                 message="Missing required train_id",
-                rule_reference="IR-G&SR-TRAIN-ID-MANDATORY",
+                rule_reference="OPERATIONAL-IDENTIFIER-MANDATORY",
                 contradiction=contradiction,
                 processing_latency_ms=latency,
             )
@@ -310,20 +335,20 @@ class IngestionValidator:
                     train_id=raw.train_id,
                     feed_id=raw.feed_id,
                     description=f"Reported speed {raw.speed_kmph} km/h exceeds corridor maximum {MAX_ABSOLUTE_TRAIN_SPEED_KMPH} km/h.",
-                    rule_reference="IR-G&SR-MAX-CORRIDOR-SPEED",
+                    rule_reference="WTT-SANCTIONED-CORRIDOR-MPS",
                     offending_payload=raw.model_dump(mode="json"),
                 )
                 return IngestionValidationResult(
                     status="CONTRADICTION",
                     reason_code="PHYSICAL_IMPOSSIBILITY",
                     message=f"Absolute speed ceiling exceeded: {raw.speed_kmph} km/h",
-                    rule_reference="IR-G&SR-MAX-CORRIDOR-SPEED",
+                    rule_reference="WTT-SANCTIONED-CORRIDOR-MPS",
                     contradiction=contradiction,
                     processing_latency_ms=latency,
                 )
 
-            # Check train-specific category speed
-            train_max_speed = self._get_train_max_speed(raw.train_id, raw.train_type)
+            # Check train-specific category speed derived from WTT or rolling-stock config
+            train_max_speed, speed_rule_ref = self._get_train_max_speed(raw.train_id, raw.train_type)
             if raw.speed_kmph > train_max_speed:
                 latency = (time.perf_counter() - t0) * 1000
                 contradiction = ContradictionRecord(
@@ -334,22 +359,22 @@ class IngestionValidator:
                     feed_id=raw.feed_id,
                     description=(
                         f"Reported speed {raw.speed_kmph} km/h exceeds permitted limit {train_max_speed} km/h "
-                        f"for train {raw.train_id} (category {raw.train_type or 'INFERRED'})."
+                        f"for train {raw.train_id} (governed by {speed_rule_ref})."
                     ),
-                    rule_reference="IR-G&SR-4.08-TRAIN-SPEED",
+                    rule_reference="GR-4.08(1)-TRAIN-MPS",
                     offending_payload=raw.model_dump(mode="json"),
                 )
                 return IngestionValidationResult(
                     status="CONTRADICTION",
                     reason_code="TRAIN_SPEED_LIMIT_EXCEEDED",
                     message=f"Train category speed limit exceeded: {raw.speed_kmph} > {train_max_speed} km/h",
-                    rule_reference="IR-G&SR-4.08-TRAIN-SPEED",
+                    rule_reference="GR-4.08(1)-TRAIN-MPS",
                     contradiction=contradiction,
                     processing_latency_ms=latency,
                 )
 
             # Check location-specific speed limit or TSR
-            loc_speed_limit, reason_code = self._get_location_speed_limit(raw.location_id)
+            loc_speed_limit, reason_code, loc_rule_ref = self._get_location_speed_limit(raw.location_id)
             if raw.speed_kmph > loc_speed_limit:
                 latency = (time.perf_counter() - t0) * 1000
                 contradiction = ContradictionRecord(
@@ -360,16 +385,16 @@ class IngestionValidator:
                     feed_id=raw.feed_id,
                     description=(
                         f"Reported speed {raw.speed_kmph} km/h exceeds speed limit {loc_speed_limit} km/h "
-                        f"at location {raw.location_id}."
+                        f"at location {raw.location_id} (governed by {loc_rule_ref})."
                     ),
-                    rule_reference="IR-G&SR-4.09-PERMANENT-SPEED-RESTRICTION",
+                    rule_reference=loc_rule_ref,
                     offending_payload=raw.model_dump(mode="json"),
                 )
                 return IngestionValidationResult(
                     status="CONTRADICTION",
                     reason_code=reason_code,  # type: ignore[arg-type]
                     message=f"Section/TSR speed limit exceeded at {raw.location_id}: {raw.speed_kmph} > {loc_speed_limit} km/h",
-                    rule_reference="IR-G&SR-4.09-PERMANENT-SPEED-RESTRICTION",
+                    rule_reference=loc_rule_ref,
                     contradiction=contradiction,
                     processing_latency_ms=latency,
                 )
@@ -392,14 +417,14 @@ class IngestionValidator:
                             f"Train {raw.train_id} moving in direction {reported_dir} attempted to enter "
                             f"unidirectional block {raw.location_id} designated strictly for {blk.direction} movements."
                         ),
-                        rule_reference="IR-G&SR-3.38-DIRECTIONAL-LOCKING",
+                        rule_reference="INFRA-DIRECTIONAL-LOCK",
                         offending_payload=raw.model_dump(mode="json"),
                     )
                     return IngestionValidationResult(
                         status="CONTRADICTION",
                         reason_code="WRONG_DIRECTION_ENTRY",
                         message=f"Wrong direction movement into unidirectional block {raw.location_id}",
-                        rule_reference="IR-G&SR-3.38-DIRECTIONAL-LOCKING",
+                        rule_reference="INFRA-DIRECTIONAL-LOCK",
                         contradiction=contradiction,
                         processing_latency_ms=latency,
                     )
@@ -419,14 +444,14 @@ class IngestionValidator:
                         f"Train {raw.train_id} reported BLOCK_EXIT for block {raw.location_id}, "
                         f"but current recorded occupant is '{occupant}'."
                     ),
-                    rule_reference="IR-G&SR-AXLE-COUNTER-EXIT",
+                    rule_reference="BPAC-WHEEL-COUNT-CONTINUITY",
                     offending_payload=raw.model_dump(mode="json"),
                 )
                 return IngestionValidationResult(
                     status="CONTRADICTION",
                     reason_code="UNMATCHED_BLOCK_EXIT",
                     message=f"Block exit without prior recorded entry for train {raw.train_id}",
-                    rule_reference="IR-G&SR-AXLE-COUNTER-EXIT",
+                    rule_reference="BPAC-WHEEL-COUNT-CONTINUITY",
                     contradiction=contradiction,
                     processing_latency_ms=latency,
                 )
@@ -524,7 +549,7 @@ class IngestionValidator:
                         f"Resource {raw.location_id} is already occupied by {current_occupant}; "
                         f"incoming event reports {raw.train_id} entering without prior vacation."
                     ),
-                    rule_reference="HC-001-EXCLUSIVE-OCCUPANCY",
+                    rule_reference="GR-8.01-ABSOLUTE-BLOCK-MUTEX",
                     offending_payload=raw.model_dump(mode="json"),
                     prior_state={"occupying_train_id": current_occupant, "location_id": raw.location_id},
                 )
@@ -532,7 +557,7 @@ class IngestionValidator:
                     status="CONTRADICTION",
                     reason_code="MUTUAL_EXCLUSION_COLLISION",
                     message="Mutual exclusion violation on single resource",
-                    rule_reference="HC-001-EXCLUSIVE-OCCUPANCY",
+                    rule_reference="GR-8.01-ABSOLUTE-BLOCK-MUTEX",
                     contradiction=contradiction,
                     processing_latency_ms=latency,
                 )
@@ -560,14 +585,14 @@ class IngestionValidator:
                             f"Train {raw.train_id} entered block {raw.location_id} {headway_elapsed_min:.1f} min "
                             f"after prior train, violating minimum headway {required_headway_min:.1f} min."
                         ),
-                        rule_reference="HC-002-MINIMUM-HEADWAY",
+                        rule_reference="SIM-ASSUMPTION-HEADWAY",
                         offending_payload=raw.model_dump(mode="json"),
                     )
                     return IngestionValidationResult(
                         status="CONTRADICTION",
                         reason_code="HEADWAY_VIOLATION",
                         message=f"Minimum headway violation on {raw.location_id}",
-                        rule_reference="HC-002-MINIMUM-HEADWAY",
+                        rule_reference="SIM-ASSUMPTION-HEADWAY",
                         contradiction=contradiction,
                         processing_latency_ms=latency,
                     )
@@ -588,14 +613,14 @@ class IngestionValidator:
                             f"Malgaon Junction throat capacity (2) exceeded. Current transits: "
                             f"{list(self._active_throat_transits)}. Train {raw.train_id} cannot enter simultaneously."
                         ),
-                        rule_reference="HC-006-JUNCTION-THROAT-CAPACITY",
+                        rule_reference="SIM-ASSUMPTION-THROAT-CAPACITY",
                         offending_payload=raw.model_dump(mode="json"),
                     )
                     return IngestionValidationResult(
                         status="CONTRADICTION",
                         reason_code="JUNCTION_THROAT_OVERFLOW",
                         message="Junction throat capacity (2) exceeded at Malgaon",
-                        rule_reference="HC-006-JUNCTION-THROAT-CAPACITY",
+                        rule_reference="SIM-ASSUMPTION-THROAT-CAPACITY",
                         contradiction=contradiction,
                         processing_latency_ms=latency,
                     )
@@ -646,7 +671,7 @@ class IngestionValidator:
             reason_code="VALID_EVENT",
             event=norm_event,
             message="Event validated and normalized successfully",
-            rule_reference="IR-G&SR-VALID",
+            rule_reference="TELEMETRY-VALID",
             sequence_gap_detected=gap_detected,
             gap_size=gap_size,
             processing_latency_ms=latency,

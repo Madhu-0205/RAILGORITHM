@@ -626,7 +626,10 @@ export interface StationMasterKpis {
     trains_monitored: number;
     on_time_trains: number;
     delayed_trains: number;
-    schedule_adherence_pct: number;
+    schedule_adherence_pct: number | null;
+    adherence_status?: "NORMAL" | "NO_DATA";
+    adherence_explanation?: string;
+    punctuality_threshold_min?: number;
     average_arrival_delay_min: number;
     average_departure_delay_min: number;
     platform_availability_pct: number;

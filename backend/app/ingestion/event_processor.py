@@ -1,17 +1,24 @@
 """Event processor: applies validated movement events to operational state idempotently.
 
 Handles real-time operational state transitions, delay calculations, conflict engine
-triggering, and strict simulation vs live environment isolation.
+triggering, durable two-tier idempotency (memory LRU + SQLite persistent store),
+and strict simulation vs live environment isolation.
 """
 from __future__ import annotations
 
+import copy
+import hashlib
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
-from collections import OrderedDict
 
+from sqlalchemy.orm import Session
+
+from ..db import SessionLocal
 from ..domain.conflicts import detect_conflicts
 from ..domain.network import Network
+from ..models import FeedCheckpointRecord, ProcessedEventRecord
 from .models import EnvironmentMode, NormalizedMovementEvent
 
 
@@ -24,30 +31,132 @@ class OperationalEventProcessor:
 
     def __init__(self, expected_environment: EnvironmentMode = "SYNTHETIC_SIMULATION"):
         self.expected_environment = expected_environment
-        # LRU cache of processed event IDs to guarantee idempotency: event_id -> timestamp
+        # Tier 1 fast in-memory LRU cache of processed event IDs: event_id -> timestamp
         self._processed_events: OrderedDict[str, float] = OrderedDict()
         self._max_processed_cache = 10000
+        self.durability_mode: str = "DURABLE_SQLITE"
 
-    def is_processed(self, event_id: str) -> bool:
-        return event_id in self._processed_events
-
-    def _mark_processed(self, event_id: str) -> None:
+    def _cache_processed(self, event_id: str) -> None:
         self._processed_events[event_id] = time.time()
         if len(self._processed_events) > self._max_processed_cache:
             self._processed_events.popitem(last=False)
+
+    def is_processed(self, event_id: str, db: Session | None = None, check_persistent: bool = True) -> bool:
+        """Check whether an event has already been processed using 2-tier idempotency.
+        
+        Tier 1: High-throughput in-memory LRU cache.
+        Tier 2: Persistent database records for survivability across server restarts & evictions.
+        """
+        # Tier 1: Check in-memory LRU cache
+        if event_id in self._processed_events:
+            return True
+
+        if not check_persistent:
+            return False
+
+        # Tier 2: Check persistent storage
+        try:
+            if db is not None:
+                rec = db.query(ProcessedEventRecord).filter(ProcessedEventRecord.event_id == event_id).first()
+                if rec:
+                    self._cache_processed(event_id)
+                    return True
+            else:
+                with SessionLocal() as session:
+                    rec = session.query(ProcessedEventRecord).filter(ProcessedEventRecord.event_id == event_id).first()
+                    if rec:
+                        self._cache_processed(event_id)
+                        return True
+        except Exception:
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            # Fallback to in-memory mode if DB is unavailable or degraded
+            self.durability_mode = "DEGRADED_IN_MEMORY"
+
+        return False
+
+    def _mark_processed(
+        self,
+        event: NormalizedMovementEvent,
+        state_version: int,
+        db: Session | None = None,
+        persist: bool = True,
+    ) -> None:
+        """Mark an event as processed in both in-memory cache and persistent SQLite store."""
+        # Update Tier 1 LRU cache
+        self._cache_processed(event.event_id)
+
+        if not persist:
+            return
+
+        # Update Tier 2 persistent store and feed checkpoints
+        def _persist(session: Session) -> None:
+            hash_val = getattr(event, "payload_hash", None)
+            if not hash_val:
+                try:
+                    hash_val = hashlib.sha256(event.model_dump_json().encode("utf-8")).hexdigest()
+                except Exception:
+                    hash_val = hashlib.sha256(f"{event.feed_id}:{event.sequence_num}:{event.event_id}".encode("utf-8")).hexdigest()
+
+            rec = ProcessedEventRecord(
+                feed_id=event.feed_id,
+                sequence_num=event.sequence_num,
+                event_id=event.event_id,
+                payload_hash=hash_val,
+                state_version=state_version,
+            )
+            session.add(rec)
+
+            chk = session.query(FeedCheckpointRecord).filter(FeedCheckpointRecord.feed_id == event.feed_id).first()
+            if not chk:
+                chk = FeedCheckpointRecord(
+                    feed_id=event.feed_id,
+                    last_processed_sequence=event.sequence_num,
+                    last_processed_timestamp=event.timestamp,
+                    last_event_id=event.event_id,
+                )
+                session.add(chk)
+            else:
+                if event.sequence_num > chk.last_processed_sequence:
+                    chk.last_processed_sequence = event.sequence_num
+                    chk.last_processed_timestamp = event.timestamp
+                    chk.last_event_id = event.event_id
+            session.commit()
+
+        try:
+            if db is not None:
+                _persist(db)
+            else:
+                with SessionLocal() as session:
+                    _persist(session)
+            self.durability_mode = "DURABLE_SQLITE"
+        except Exception:
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            # Graceful degradation without failing operational dispatch
+            self.durability_mode = "DEGRADED_IN_MEMORY"
 
     def process_event(
         self,
         event: NormalizedMovementEvent,
         state: dict[str, Any],
         recalculate_conflicts: bool = True,
+        db: Session | None = None,
+        persist: bool = True,
     ) -> dict[str, Any]:
         """Apply a normalized movement event to an operational state dictionary.
 
         Guarantees:
         - Strict environment isolation (rejects cross-environment events).
-        - Idempotency (re-processing the same event_id produces no secondary state mutation).
+        - Durable 2-tier idempotency (re-processing the same event_id produces no secondary state mutation).
         - Accurate delay calculations and state version incrementing.
+        - Transparent durability status reporting.
         """
         # 1. Environment Isolation Check
         state_env = state.get("environment_mode", "SYNTHETIC_SIMULATION")
@@ -58,12 +167,13 @@ class OperationalEventProcessor:
             )
 
         # 2. Idempotency Check
-        if self.is_processed(event.event_id):
+        if self.is_processed(event.event_id, db=db, check_persistent=persist):
             return {
                 "success": True,
                 "idempotent": True,
                 "event_id": event.event_id,
                 "state_version": state.get("version", 1),
+                "durability": self.durability_mode if persist else "IN_MEMORY_REPLAY",
                 "message": f"Event '{event.event_id}' already applied; state unchanged.",
             }
 
@@ -152,7 +262,7 @@ class OperationalEventProcessor:
                     # Maintain existing conflicts if conflict detector cannot parse partial state
                     pass
 
-        self._mark_processed(event.event_id)
+        self._mark_processed(event, state.get("version", 1), db=db, persist=persist)
 
         return {
             "success": True,
@@ -161,6 +271,7 @@ class OperationalEventProcessor:
             "state_version": state.get("version", 1),
             "state_modified": state_modified,
             "conflicts_detected": len(conflicts),
+            "durability": self.durability_mode if persist else "IN_MEMORY_REPLAY",
             "applied_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -168,13 +279,25 @@ class OperationalEventProcessor:
         self,
         events: list[NormalizedMovementEvent],
         initial_state: dict[str, Any],
+        persist_events: bool = False,
     ) -> dict[str, Any]:
-        """Deterministically replay a sequence of normalized movement events to reconstruct state."""
-        state = dict(initial_state)
-        # Sort events monotonically by sequence number and timestamp
-        sorted_events = sorted(events, key=lambda e: (e.sequence_num, e.timestamp))
+        """Deterministically replay a sequence of normalized movement events to reconstruct state.
+        
+        Guarantees:
+        - Deep copy of initial state prevents mutative side-effects on caller state.
+        - Cross-feed multi-sequence deterministic ordering sorted by timestamp, feed_id, sequence_num, event_id.
+        - Defaults to persist_events=False to prevent polluting durable state checkpoints during replay.
+        """
+        state = copy.deepcopy(initial_state)
+        # Deterministic multi-feed replay ordering:
+        # Feed sequence numbers are per-feed, so multi-feed sorting must prioritize event timestamp,
+        # followed by feed_id, sequence_num, and event_id for total deterministic ordering.
+        sorted_events = sorted(
+            events,
+            key=lambda e: (e.timestamp, e.feed_id, e.sequence_num, e.event_id),
+        )
         for ev in sorted_events:
-            self.process_event(ev, state, recalculate_conflicts=False)
+            self.process_event(ev, state, recalculate_conflicts=False, persist=persist_events)
         
         # Final conflict recalculation at the end of replay
         try:
