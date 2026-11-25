@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-11-25T07:20:46.486297+00:00",
+  "environment": "macOS Python 3.14 / SQLite In-Memory & File",
+  "ingestion_performance": {
+    "event_count": 1000,
+    "total_wall_time_s": 0.0138,
+    "throughput_events_per_sec": 72446.9,
+    "mean_latency_ms": 0.0055,
+    "median_latency_ms": 0.005,
+    "p95_latency_ms": 0.0106,
+    "p99_latency_ms": 0.0213,
+    "max_latency_ms": 0.1589,
+    "valid_events_ingested": 1000
+  },
+  "concurrent_api_performance": {
+    "concurrent_workers": 20,
+    "total_queries_executed": 100,
+    "successful_queries": 100,
+    "errors": 0,
+    "error_rate_pct": 0.0,
+    "wall_time_s": 0.5055,
+    "query_throughput_qps": 197.8,
+    "mean_response_time_ms": 96.73,
+    "p95_response_time_ms": 126.02,
+    "max_response_time_ms": 134.21
+  },
+  "recommendation_pipeline_performance": {
+    "scenario": "evening_peak",
+    "iterations": 3,
+    "mean_recommendation_time_ms": 310.7,
+    "min_recommendation_time_ms": 267.83,
+    "max_recommendation_time_ms": 386.89
+  },
+  "summary": {
+    "ingestion_throughput_capacity": "72446.9 events/sec",
+    "ingestion_p95_latency": "0.0106 ms",
+    "api_qps_capacity": "197.8 queries/sec",
+    "api_p95_latency": "126.02 ms",
+    "error_rate": "0.0%",
+    "pipeline_generation_mean": "310.7 ms"
+  }
+}

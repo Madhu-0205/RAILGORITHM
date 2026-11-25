@@ -65,6 +65,54 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={statusClass(status)}>{status.replace(/_/g, " ")}</span>;
 }
 
+export function Badge({
+  children,
+  tone = "default",
+  className = "",
+}: {
+  children: ReactNode;
+  tone?: "default" | "good" | "watch" | "bad" | "muted" | "accent";
+  className?: string;
+}) {
+  const toneClass =
+    tone === "good"
+      ? "badge-good"
+      : tone === "watch"
+      ? "badge-watch"
+      : tone === "bad"
+      ? "badge-danger"
+      : tone === "muted"
+      ? "badge-muted"
+      : tone === "accent"
+      ? "badge-accent"
+      : "badge-default";
+  return <span className={`badge ${toneClass} ${className}`}>{children}</span>;
+}
+
+export function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="dialog-backdrop" role="dialog" aria-modal="true">
+      <div className="dialog">
+        <header className="dialog-header">
+          <h3>{title}</h3>
+          <button type="button" className="button button-ghost" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </header>
+        <div className="dialog-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export function EvidenceBadge({ status }: { status: string }) {
   const tone =
     status === "VALIDATED"

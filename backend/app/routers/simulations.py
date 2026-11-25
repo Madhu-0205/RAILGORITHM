@@ -19,7 +19,11 @@ from ..schemas import (
     SimulationCreate,
     WhatIfRequest,
 )
-from ..services.analytics_service import analytics as build_analytics
+from ..services.analytics_service import (
+    analytics as build_analytics,
+    section_controller_kpis,
+    station_master_kpis,
+)
 from ..services.recommendation_service import (
     generate_record,
     list_records,
@@ -349,6 +353,26 @@ def analytics(
     user: User = Depends(get_current_user),
 ) -> dict:
     return build_analytics(db, simulation)
+
+
+@router.get("/{simulation_id}/analytics/station-master")
+def station_analytics(
+    station_id: str | None = None,
+    db: Session = Depends(get_db),
+    simulation: Simulation = Depends(get_simulation),
+    user: User = Depends(get_current_user),
+) -> dict:
+    target = station_id or user.station_id or "MLG"
+    return station_master_kpis(db, simulation, target)
+
+
+@router.get("/{simulation_id}/analytics/section-controller")
+def section_analytics(
+    db: Session = Depends(get_db),
+    simulation: Simulation = Depends(get_simulation),
+    user: User = Depends(get_current_user),
+) -> dict:
+    return section_controller_kpis(db, simulation)
 
 
 @router.get("/{simulation_id}/recommendations")

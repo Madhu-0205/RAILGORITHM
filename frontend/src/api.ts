@@ -15,6 +15,9 @@ import type {
   User,
   WhatIfResult,
   Conflict,
+  FeedHealthMetrics,
+  SectionControllerKpis,
+  StationMasterKpis,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -246,5 +249,20 @@ export const api = {
   },
   systemVersions() {
     return request<Record<string, unknown>>("/system/versions");
+  },
+  stationKpis(simId: string, stationId?: string) {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    return request<StationMasterKpis>(`/simulations/${simId}/analytics/station-master${query}`);
+  },
+  sectionKpis(simId: string) {
+    return request<SectionControllerKpis>(`/simulations/${simId}/analytics/section-controller`);
+  },
+  feedStatus() {
+    return request<FeedHealthMetrics[]>("/ingestion/status");
+  },
+  reconnectFeed(feedId: string) {
+    return request<{ success: boolean; status: string }>(`/ingestion/feeds/${feedId}/reconnect`, {
+      method: "POST",
+    });
   },
 };

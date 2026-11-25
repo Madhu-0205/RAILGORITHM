@@ -587,3 +587,139 @@ export interface ModelRecord {
   artifact_path: string | null;
   created_at: string;
 }
+
+export interface FeedHealthMetrics {
+  feed_id: string;
+  feed_name: string;
+  status: "HEALTHY" | "DEGRADED" | "STALE" | "OFFLINE";
+  connected: boolean;
+  last_heartbeat_at: string | null;
+  freshness_seconds: number;
+  is_stale: boolean;
+  events_received_total: number;
+  events_valid_total: number;
+  duplicates_detected_total: number;
+  sequence_gaps_total: number;
+  contradictions_detected_total: number;
+  mean_ingestion_latency_ms: number;
+  error_rate_pct: number;
+  reconnection_attempts: number;
+  circuit_breaker_open: boolean;
+  mode: string;
+  stale_threshold_seconds: number;
+  degraded_threshold_seconds: number;
+}
+
+export interface StationMasterKpis {
+  station_id: string;
+  station_name: string;
+  simulation_time: string;
+  sim_time_min: number;
+  time_period: string;
+  data_freshness: {
+    status: string;
+    freshness_seconds: number;
+    is_stale: boolean;
+    last_heartbeat_at: string | null;
+  };
+  kpis: {
+    trains_monitored: number;
+    on_time_trains: number;
+    delayed_trains: number;
+    schedule_adherence_pct: number;
+    average_arrival_delay_min: number;
+    average_departure_delay_min: number;
+    platform_availability_pct: number;
+    platforms_total: number;
+    platforms_available: number;
+    platforms_occupied: number;
+    platforms_outage: number;
+    pending_recommendations_count: number;
+    operational_alerts_count: number;
+  };
+  platform_slots: {
+    platform_id: string;
+    status: "OCCUPIED" | "AVAILABLE" | "OUTAGE";
+    train_id: string | null;
+    description: string;
+  }[];
+  monitored_trains: {
+    id: string;
+    name: string;
+    train_type: string;
+    priority: number;
+    status: string;
+    is_at_station: boolean;
+    platform: string | null;
+    projected_delay_min: number;
+    is_on_time: boolean;
+    destination: string;
+    scheduled_arrival: string | null;
+    scheduled_departure: string | null;
+  }[];
+  operational_alerts: Conflict[];
+  pending_recommendations: {
+    id: string;
+    label: string;
+    created_at: string | null;
+    state_version: number;
+  }[];
+  kpi_definitions: Record<string, string>;
+}
+
+export interface SectionControllerKpis {
+  simulation_time: string;
+  sim_time_min: number;
+  time_period: string;
+  data_freshness: {
+    status: string;
+    freshness_seconds: number;
+    is_stale: boolean;
+    last_heartbeat_at: string | null;
+    error_rate_pct: number;
+  };
+  kpis: {
+    trains_active: number;
+    trains_completed: number;
+    trains_scheduled: number;
+    trains_delayed: number;
+    average_section_delay_min: number;
+    total_section_delay_min: number;
+    block_occupancy_pct: number;
+    blocks_occupied: number;
+    blocks_total: number;
+    junction_throat_load_pct: number;
+    junction_queue_length: number;
+    junction_congestion_level: "LOW" | "MODERATE" | "HIGH" | "SATURATED";
+    throughput_trains_per_hour: number;
+    on_time_performance_pct: number;
+    delay_propagation_index: number;
+    secondary_delay_min: number;
+    knock_on_risk_level: "LOW" | "MODERATE" | "HIGH" | "SEVERE";
+    conflicts_total: number;
+    conflicts_critical: number;
+    conflicts_major: number;
+    conflicts_minor: number;
+    pending_decisions_count: number;
+    recovery_clearance_rate_pct: number;
+  };
+  junction_status: {
+    junction_id: string;
+    junction_name: string;
+    throat_capacity: number;
+    active_transits: number;
+    transiting_trains: string[];
+    congestion_level: string;
+  };
+  occupied_bottlenecks: { block_id: string; train_id: string }[];
+  severity_breakdown: Record<string, number>;
+  active_conflicts: Conflict[];
+  pending_decisions: {
+    id: string;
+    label: string;
+    affected_stations: string[];
+    disagreement: boolean;
+    created_at: string | null;
+  }[];
+  kpi_definitions: Record<string, string>;
+}

@@ -17,6 +17,7 @@ from .domain.ppo import metadata_summary
 from .routers import (
     audit,
     auth,
+    ingestion,
     models_router,
     recommendations,
     scenarios,
@@ -96,6 +97,7 @@ for router in (
     audit.router,
     models_router.router,
     system.router,
+    ingestion.router,
 ):
     app.include_router(router, prefix=settings.api_prefix)
 

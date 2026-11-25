@@ -1586,3 +1586,92 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- RAILGORITHM 2.2 Feed Health & Role Dashboard Styles ---------- */
+
+.feed-health-pill-container {
+  display: flex;
+  align-items: center;
+}
+
+.feed-health-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgba(13, 21, 31, 0.85);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.feed-health-button:hover {
+  background: rgba(26, 38, 54, 0.95);
+  border-color: var(--accent);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-healthy {
+  background: #35c48a;
+  box-shadow: 0 0 6px rgba(53, 196, 138, 0.6);
+}
+
+.dot-degraded {
+  background: #f0b429;
+  box-shadow: 0 0 6px rgba(240, 180, 41, 0.6);
+}
+
+.dot-stale {
+  background: #f97316;
+  box-shadow: 0 0 6px rgba(249, 115, 22, 0.6);
+}
+
+.dot-offline {
+  background: #f2545b;
+  box-shadow: 0 0 6px rgba(242, 84, 91, 0.6);
+}
+
+.select-small {
+  padding: 4px 8px;
+  background: var(--panel-strong);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.metric-box {
+  padding: 10px;
+  background: #0d151f;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.platform-berth-card {
+  transition: border-color 0.15s;
+}
+
+.platform-berth-card.status-occupied {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.platform-berth-card.status-outage {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.platform-berth-card.status-available {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+

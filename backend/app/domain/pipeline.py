@@ -33,6 +33,7 @@ from .spec import (
     SIMULATION_MODEL_VERSION,
     configured_objective_profile,
 )
+from ..ingestion.feed_manager import feed_manager
 from .state import (
     format_minutes,
     projected_delay,
@@ -318,10 +319,20 @@ def generate_recommendation(
         "objective_profile": configured_objective_profile(),
     }
     problems = validate_state_integrity(state)
+    feed_health = feed_manager.get_feed_health("FEED-SIGNAL-01")
+    data_freshness = {
+        "feed_id": feed_health.feed_id,
+        "feed_status": feed_health.status,
+        "freshness_seconds": feed_health.freshness_seconds,
+        "is_stale": feed_health.is_stale,
+        "stale_data_warning": bool(feed_health.is_stale or feed_health.status in {"STALE", "OFFLINE"}),
+        "data_label": "SYNTHETIC_DATA_TESTBED",
+    }
     if problems:
         return {
             **base,
             "evidence_status": INCOMPLETE_DATA,
+            "data_freshness": data_freshness,
             "conflicts": [],
             "recommended": None,
             "alternatives": [],
@@ -811,9 +822,20 @@ def generate_recommendation(
         data_issues=[],
     )
 
+    feed_health = feed_manager.get_feed_health("FEED-SIGNAL-01")
+    data_freshness = {
+        "feed_id": feed_health.feed_id,
+        "feed_status": feed_health.status,
+        "freshness_seconds": feed_health.freshness_seconds,
+        "is_stale": feed_health.is_stale,
+        "stale_data_warning": bool(feed_health.is_stale or feed_health.status in {"STALE", "OFFLINE"}),
+        "data_label": "SYNTHETIC_DATA_TESTBED",
+    }
+
     return {
         **base,
         "evidence_status": evidence_status,
+        "data_freshness": data_freshness,
         "conflicts": conflicts,
         "primary_conflicts": primary_conflicts(conflicts),
         "recommended": recommended_payload,

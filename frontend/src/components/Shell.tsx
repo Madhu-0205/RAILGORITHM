@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { formatMinutes } from "../lib/format";
 import { useSimulation } from "../simulation";
+import { FeedHealthBanner } from "./FeedHealthBanner";
 import { NewSimulationDialog } from "./NewSimulationDialog";
 import { SyntheticBanner } from "./ui";
 
@@ -196,6 +197,7 @@ export function Shell() {
               New simulation
             </button>
           )}
+          <FeedHealthBanner />
         </header>
 
         {message && (

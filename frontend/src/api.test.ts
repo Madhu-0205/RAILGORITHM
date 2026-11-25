@@ -76,4 +76,60 @@ describe("api client", () => {
 
     await expect(api.models()).rejects.toThrow("status 500");
   });
+
+  it("fetches feed status and posts reconnect feed", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            feed_id: "feed-1",
+            feed_name: "Mock Feed",
+            status: "HEALTHY",
+            mode: "AUTHORIZED_PARTNER_API",
+            freshness_seconds: 1.5,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          status: "reconnected",
+          feed_id: "feed-1",
+          connected: true,
+        }),
+      );
+
+    const feeds = await api.feedStatus();
+    expect(feeds).toHaveLength(1);
+    expect(feeds[0].feed_id).toBe("feed-1");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/ingestion/status");
+
+    const rec = await api.reconnectFeed("feed-1");
+    expect(rec.status).toBe("reconnected");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/ingestion/feeds/feed-1/reconnect");
+  });
+
+  it("fetches station and section kpis", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          station_id: "MLG",
+          station_name: "Malgaon Junction",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          time_period: "06:00 - 07:00 IST",
+        }),
+      );
+
+    const station = await api.stationKpis("sim-1", "MLG");
+    expect(station.station_id).toBe("MLG");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/simulations/sim-1/analytics/station-master?station_id=MLG");
+
+    const section = await api.sectionKpis("sim-1");
+    expect(section.time_period).toContain("IST");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/simulations/sim-1/analytics/section-controller");
+  });
 });
