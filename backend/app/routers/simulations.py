@@ -1,7 +1,7 @@
 """Simulation, dashboard, disruption and what-if endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -358,12 +358,15 @@ def analytics(
 @router.get("/{simulation_id}/analytics/station-master")
 def station_analytics(
     station_id: str | None = None,
+    punctuality_threshold_min: int = Query(default=5, ge=0, le=60),
     db: Session = Depends(get_db),
     simulation: Simulation = Depends(get_simulation),
     user: User = Depends(get_current_user),
 ) -> dict:
     target = station_id or user.station_id or "MLG"
-    return station_master_kpis(db, simulation, target)
+    return station_master_kpis(
+        db, simulation, target, punctuality_threshold_min=punctuality_threshold_min
+    )
 
 
 @router.get("/{simulation_id}/analytics/section-controller")

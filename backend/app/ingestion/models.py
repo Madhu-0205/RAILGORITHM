@@ -22,7 +22,7 @@ EventType = Literal[
     "HEARTBEAT",
 ]
 
-FeedStatus = Literal["HEALTHY", "DEGRADED", "STALE", "OFFLINE"]
+FeedStatus = Literal["HEALTHY", "DEGRADED", "STALE", "OFFLINE", "DURABILITY_UNAVAILABLE", "REPLAY_UNCERTAIN"]
 
 EnvironmentMode = Literal["LIVE_OPERATIONAL", "SYNTHETIC_SIMULATION", "HISTORICAL_PLAYBACK"]
 
@@ -80,6 +80,11 @@ class RawFeedPayload(BaseModel):
     train_type: str | None = None
     direction: Literal["UP", "DOWN", "BIDIRECTIONAL"] | None = None
     environment: EnvironmentMode = "SYNTHETIC_SIMULATION"
+    source_timestamp: datetime | None = None
+    receive_timestamp: datetime | None = None
+    clock_skew_seconds: float = 0.0
+    causal_dependencies: list[str] = Field(default_factory=list)
+    causal_predecessors: list[str] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -99,6 +104,12 @@ class NormalizedMovementEvent(BaseModel):
     train_type: str | None = None
     direction: Literal["UP", "DOWN", "BIDIRECTIONAL"] | None = None
     environment: EnvironmentMode = "SYNTHETIC_SIMULATION"
+    payload_hash: str | None = None
+    source_timestamp: datetime | None = None
+    receive_timestamp: datetime | None = None
+    clock_skew_seconds: float = 0.0
+    causal_dependencies: list[str] = Field(default_factory=list)
+    causal_predecessors: list[str] = Field(default_factory=list)
     source_metadata: dict[str, Any] = Field(default_factory=dict)
     label: Literal["OPERATIONAL_FEED", "SYNTHETIC_FEED"] = "SYNTHETIC_FEED"
 

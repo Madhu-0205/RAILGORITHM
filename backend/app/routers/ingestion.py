@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..deps import get_current_user
-from ..ingestion.event_processor import event_processor
+from ..ingestion.event_processor import (
+    DurabilityUnavailableError,
+    EnvironmentIsolationError,
+    PayloadTamperingError,
+    SequenceCollisionError,
+    event_processor,
+)
 from ..ingestion.feed_manager import feed_manager
 from ..ingestion.models import (
     ContradictionRecord,
@@ -73,6 +79,16 @@ def apply_event_to_state(req: ProcessEventRequest, _user: User = Depends(get_cur
             req.event,
             req.state,
             recalculate_conflicts=req.recalculate_conflicts,
+        )
+    except DurabilityUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "DURABILITY_UNAVAILABLE", "retryable": True, "message": str(exc)},
+        )
+    except (PayloadTamperingError, SequenceCollisionError, EnvironmentIsolationError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "REJECTED", "retryable": False, "message": str(exc)},
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))

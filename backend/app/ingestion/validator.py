@@ -415,16 +415,17 @@ class IngestionValidator:
                         feed_id=raw.feed_id,
                         description=(
                             f"Train {raw.train_id} moving in direction {reported_dir} attempted to enter "
-                            f"unidirectional block {raw.location_id} designated strictly for {blk.direction} movements."
+                            f"unidirectional block {raw.location_id} designated strictly for {blk.direction} movements "
+                            f"(GR 1.02(62) Wrong Line, GR 8.01/8.03(1) Absolute Block System Line Clear)."
                         ),
-                        rule_reference="INFRA-DIRECTIONAL-LOCK",
+                        rule_reference="GR-1.02(62)-GR-8.01-DIRECTIONAL-LOCK",
                         offending_payload=raw.model_dump(mode="json"),
                     )
                     return IngestionValidationResult(
                         status="CONTRADICTION",
                         reason_code="WRONG_DIRECTION_ENTRY",
                         message=f"Wrong direction movement into unidirectional block {raw.location_id}",
-                        rule_reference="INFRA-DIRECTIONAL-LOCK",
+                        rule_reference="GR-1.02(62)-GR-8.01-DIRECTIONAL-LOCK",
                         contradiction=contradiction,
                         processing_latency_ms=latency,
                     )
@@ -654,7 +655,12 @@ class IngestionValidator:
             event_type=raw.event_type.upper(),  # type: ignore[arg-type]
             location_id=raw.location_id,
             timestamp=event_dt,
+            source_timestamp=raw.source_timestamp or event_dt,
+            receive_timestamp=raw.receive_timestamp or now_utc,
             ingested_at=now_utc,
+            clock_skew_seconds=raw.clock_skew_seconds,
+            causal_dependencies=raw.causal_dependencies,
+            causal_predecessors=raw.causal_predecessors,
             speed_kmph=raw.speed_kmph,
             delay_min=raw.delay_min,
             signal_aspect=raw.signal_aspect,

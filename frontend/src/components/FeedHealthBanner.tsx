@@ -66,6 +66,20 @@ export function FeedHealthBanner() {
         </button>
       </div>
 
+      {primary.status === "DURABILITY_UNAVAILABLE" && (
+        <div className="banner banner-error" role="alert">
+          <strong>DURABILITY UNAVAILABLE:</strong> Database persistence for live operational events is unavailable.
+          Event acknowledgements are suspended to prevent uncommitted data loss.
+        </div>
+      )}
+
+      {primary.status === "REPLAY_UNCERTAIN" && (
+        <div className="banner banner-warning" role="alert">
+          <strong>REPLAY UNCERTAIN:</strong> Multi-feed causal ordering contains unresolved dependencies or timestamp inversions.
+          State reconstruction is marked advisory-only and non-authoritative.
+        </div>
+      )}
+
       {primary.is_stale && (
         <div className="banner banner-warning" role="alert">
           <strong>FEED STALE:</strong> Live railway telemetry was last received{" "}

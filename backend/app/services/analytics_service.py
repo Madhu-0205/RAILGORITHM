@@ -141,7 +141,12 @@ def analytics(db: Session, simulation: Simulation) -> dict:
     }
 
 
-def station_master_kpis(db: Session, simulation: Simulation, station_id: str) -> dict:
+def station_master_kpis(
+    db: Session,
+    simulation: Simulation,
+    station_id: str,
+    punctuality_threshold_min: int = 5,
+) -> dict:
     """Traceable operational KPIs specifically scoped for Station Master jurisdiction."""
     state = simulation.state
     now = int(state["sim_time_min"])
@@ -185,7 +190,7 @@ def station_master_kpis(db: Session, simulation: Simulation, station_id: str) ->
                 "is_at_station": is_at_station,
                 "platform": train.get("platform") if is_at_station else None,
                 "projected_delay_min": proj_del,
-                "is_on_time": proj_del <= 5,
+                "is_on_time": proj_del <= punctuality_threshold_min,
                 "destination": train["destination"],
                 "scheduled_arrival": format_minutes(sched_entry["arrival_min"]) if sched_entry and sched_entry.get("arrival_min") else None,
                 "scheduled_departure": format_minutes(sched_entry["departure_min"]) if sched_entry and sched_entry.get("departure_min") else None,
@@ -196,7 +201,7 @@ def station_master_kpis(db: Session, simulation: Simulation, station_id: str) ->
     if monitored_trains:
         adherence_pct: float | None = round(100.0 * on_time_count / len(monitored_trains), 1)
         adherence_status = "NORMAL"
-        adherence_explanation = f"{on_time_count} of {len(monitored_trains)} monitored trains on-time (<= 5 min delay)"
+        adherence_explanation = f"{on_time_count} of {len(monitored_trains)} monitored trains on-time (<= {punctuality_threshold_min} min delay)"
     else:
         adherence_pct = None
         adherence_status = "NO_DATA"
@@ -283,9 +288,9 @@ def station_master_kpis(db: Session, simulation: Simulation, station_id: str) ->
             "schedule_adherence_pct": adherence_pct,
             "adherence_status": adherence_status,
             "adherence_explanation": adherence_explanation,
-            "punctuality_threshold_min": 5,
-            "average_arrival_delay_min": round(sum(arrival_delays) / max(1, len(arrival_delays)), 1) if arrival_delays else 0.0,
-            "average_departure_delay_min": round(sum(departure_delays) / max(1, len(departure_delays)), 1) if departure_delays else 0.0,
+            "punctuality_threshold_min": punctuality_threshold_min,
+            "average_arrival_delay_min": round(sum(arrival_delays) / len(arrival_delays), 1) if arrival_delays else None,
+            "average_departure_delay_min": round(sum(departure_delays) / len(departure_delays), 1) if departure_delays else None,
             "platform_availability_pct": avail_pct,
             "platforms_total": len(platforms),
             "platforms_available": avail_count,
@@ -308,10 +313,11 @@ def station_master_kpis(db: Session, simulation: Simulation, station_id: str) ->
         ],
         "kpi_definitions": {
             "trains_monitored": "Count of trains currently berthed at or scheduled to arrive at this station within 60 min.",
-            "schedule_adherence_pct": "Percentage of monitored trains with projected arrival/departure delay <= 5 minutes (standard IR Mail/Express reporting threshold). Reports null when no trains are present in the observation window.",
-            "punctuality_threshold_min": "Operating delay threshold (5 minutes) used to classify train arrivals as on-time according to Indian Railways operating guidelines.",
+            "schedule_adherence_pct": "Percentage of monitored trains with projected arrival/departure delay <= punctuality threshold (standard IR Mail/Express reporting guideline). Reports null when no trains are present in the observation window.",
+            "punctuality_threshold_min": "Operating delay threshold (default 5 minutes) used to classify train arrivals as on-time according to Indian Railways operating guidelines (Railway Board Operating Directorate punctuality circulars), not a statutory General Rule.",
             "platform_availability_pct": "Percentage of total station platforms not currently occupied or under maintenance outage.",
-            "average_arrival_delay_min": "Arithmetic mean of projected arrival delays for all approaching trains at this station.",
+            "average_arrival_delay_min": "Arithmetic mean of projected arrival delays for all approaching trains at this station. Reports null when no approaching trains are present.",
+            "average_departure_delay_min": "Arithmetic mean of projected departure delays for all stationed trains. Reports null when no stationed trains are present.",
             "operational_alerts_count": "Active track exclusivity, headway, or platform conflicts within station interlocking limits.",
         },
     }
@@ -397,8 +403,13 @@ def section_controller_kpis(db: Session, simulation: Simulation) -> dict:
 
     # 7. Recovery performance
     total_conflicts_seen = state["counters"].get("conflicts_detected", len(conflicts))
-    resolved_count = max(0, total_conflicts_seen - len(conflicts))
-    clearance_rate = round(100.0 * resolved_count / max(1, total_conflicts_seen), 1)
+    if total_conflicts_seen == 0 and len(conflicts) == 0:
+        clearance_rate: float | None = None
+        recovery_status = "NO_DATA"
+    else:
+        resolved_count = max(0, total_conflicts_seen - len(conflicts))
+        clearance_rate = round(100.0 * resolved_count / max(1, total_conflicts_seen), 1)
+        recovery_status = "ACTIVE"
 
     # Feed health
     fh = feed_manager.get_feed_health("FEED-SIGNAL-01")
@@ -476,6 +487,6 @@ def section_controller_kpis(db: Session, simulation: Simulation) -> dict:
             "block_occupancy_pct": "Proportion of total running line track blocks currently occupied by trains (excluding sidings/dead-ends).",
             "junction_throat_load_pct": "Current simultaneous transits through Malgaon junction throat divided by physical throat limit (2).",
             "delay_propagation_index": "Advisory heuristic estimate (non-statutory): ratio of secondary knock-on delays to root-cause initial delays (DPI = Secondary Delay / Initial Delay).",
-            "recovery_clearance_rate_pct": "Percentage of historical conflicts successfully resolved through dispatcher decisions or spatial clearance.",
+            "recovery_clearance_rate_pct": "Percentage of historical conflicts successfully resolved through dispatcher decisions or spatial clearance. Reports null when no conflicts have occurred.",
         },
     }

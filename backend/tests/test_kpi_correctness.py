@@ -86,8 +86,8 @@ def test_station_master_empty_station_missing_data_behavior():
     assert kpis["adherence_status"] == "NO_DATA"
     assert "No trains" in kpis["adherence_explanation"]
     assert kpis["punctuality_threshold_min"] == 5
-    assert kpis["average_arrival_delay_min"] == 0.0
-    assert kpis["average_departure_delay_min"] == 0.0
+    assert kpis["average_arrival_delay_min"] is None
+    assert kpis["average_departure_delay_min"] is None
     assert kpis["platform_availability_pct"] == 100.0
 
 

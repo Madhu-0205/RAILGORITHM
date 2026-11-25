@@ -591,7 +591,7 @@ export interface ModelRecord {
 export interface FeedHealthMetrics {
   feed_id: string;
   feed_name: string;
-  status: "HEALTHY" | "DEGRADED" | "STALE" | "OFFLINE";
+  status: "HEALTHY" | "DEGRADED" | "STALE" | "OFFLINE" | "DURABILITY_UNAVAILABLE" | "REPLAY_UNCERTAIN";
   connected: boolean;
   last_heartbeat_at: string | null;
   freshness_seconds: number;
@@ -630,8 +630,8 @@ export interface StationMasterKpis {
     adherence_status?: "NORMAL" | "NO_DATA";
     adherence_explanation?: string;
     punctuality_threshold_min?: number;
-    average_arrival_delay_min: number;
-    average_departure_delay_min: number;
+    average_arrival_delay_min: number | null;
+    average_departure_delay_min: number | null;
     platform_availability_pct: number;
     platforms_total: number;
     platforms_available: number;
@@ -704,7 +704,7 @@ export interface SectionControllerKpis {
     conflicts_major: number;
     conflicts_minor: number;
     pending_decisions_count: number;
-    recovery_clearance_rate_pct: number;
+    recovery_clearance_rate_pct: number | null;
   };
   junction_status: {
     junction_id: string;

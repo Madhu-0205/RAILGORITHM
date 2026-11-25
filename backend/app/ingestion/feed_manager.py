@@ -179,6 +179,16 @@ class OperationalFeedManager:
         """Ingest a batch of raw feed events in sequence."""
         return [self.ingest_event(raw) for raw in batch]
 
+    def set_feed_durability_unavailable(self, feed_id: str, unavailable: bool = True) -> None:
+        """Mark a feed as suffering from persistent database/durability failure."""
+        if feed_id in self._feeds:
+            self._feeds[feed_id]["durability_unavailable"] = unavailable
+
+    def set_feed_replay_uncertain(self, feed_id: str, uncertain: bool = True) -> None:
+        """Mark a feed as having causal ordering ambiguity or unresolvable dependencies."""
+        if feed_id in self._feeds:
+            self._feeds[feed_id]["replay_uncertain"] = uncertain
+
     def set_feed_connection(self, feed_id: str, connected: bool) -> None:
         """Manually toggle feed connection state (e.g. for testing failover and recovery)."""
         if feed_id in self._feeds:
@@ -223,8 +233,12 @@ class OperationalFeedManager:
         freshness_sec = (now - last_hb).total_seconds() if last_hb else 999999.0
         connected = feed["connected"] and not feed["circuit_breaker_open"]
 
-        if not connected:
-            status: FeedStatus = "OFFLINE"
+        if feed.get("durability_unavailable"):
+            status: FeedStatus = "DURABILITY_UNAVAILABLE"
+        elif feed.get("replay_uncertain"):
+            status: FeedStatus = "REPLAY_UNCERTAIN"
+        elif not connected:
+            status = "OFFLINE"
         elif freshness_sec > self.stale_threshold:
             status = "STALE"
         elif freshness_sec > self.degraded_threshold:

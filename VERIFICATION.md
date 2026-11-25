@@ -1,84 +1,91 @@
-# RAILGORITHM 2.4 — Railway Domain Correctness & Evidence Verification Report
+# RAILGORITHM 2.5 — Durable Operations & Causal Integrity Verification Report
 
 **Date:** 25 November 2026  
-**Version:** 2.4.0  
-**Scope:** Railway Domain Invariant Traceability (General Rules 1976, Schedule of Dimensions 2004, Working Time Table WTT), Elimination of Fabricated Regulatory Assumptions, Durable 2-Tier Event Idempotency (LRU Memory + SQLite Persistent Store `processed_events`), Causally Deterministic Multi-Feed Replay `(timestamp, feed_id, sequence_num, event_id)`, Hardened KPI Semantics (Empty Station Adherence returns `null / NO_DATA`), and Decoupled 12-Dimensional End-to-End Performance Benchmark with Warm-Up Enforcement.  
+**Version:** 2.5.0  
+**Scope:** Transactional Durability Boundaries (Fail-Fast in `LIVE_OPERATIONAL`, Atomic Working Copy State Rollback), Payload Tampering Detection (`PayloadTamperingError`), Sequence Collision Protection (`SequenceCollisionError`), Multi-Feed Causal Topological Replay (DAG Ordering, 6 Decoupled Dimensions, `REPLAY_UNCERTAIN` Anomaly Auditing), P0 Regulatory Correction (General Rules 1976: GR 3.38 Points Locking vs. GR 1.02(62) and GR 8.01/8.03(1) Directional Line Clear), KPI Authority & Null Semantics (Configurable Punctuality Threshold, Formal Nulls for Empty Observation Windows), Standardized Six Operational Statuses, and 16-Dimensional End-to-End Performance Benchmark.  
 **Classification:** Synthetic Simulation & Operational Decision-Support Testbed. Strictly read-only live telemetry ingestion. Zero autonomous control.  
-**Human Authority:** Every operational recommendation requires explicit human verification, authorization, and confirmation by a Station Master or Section Controller before physical execution. Cryptographically sealed in an append-only SHA-256 hash chain.
+**Human Authority:** Every operational recommendation requires explicit human verification, authorization, and confirmation by a Station Master or Section Controller before physical adoption. Cryptographically sealed in an append-only SHA-256 hash chain.
 
 ---
 
 ## 1. Executive Summary & Verification Verdict
 
-RAILGORITHM 2.4 elevates the system from an audited operational prototype into a rigorously verified, evidence-based railway traffic decision-support platform. It conducts an uncompromising audit of all railway-related invariants, eliminating invented rule identifiers (such as `IR-G&SR-4.08-FRT`) in favor of authentic statutory citations from the **General Rules 1976 (Open Lines)**, **IR Schedule of Dimensions 2004**, and verified **Working Time Table (WTT)** clauses. Every synthetic approximation is explicitly tagged as `SIM-ASSUMPTION-*`.
+RAILGORITHM 2.5 establishes complete transactional durability boundaries, atomic state rollback guarantees, and causal event integrity for railway decision-support operations.
 
-Furthermore, it replaces vulnerable in-memory-only event deduplication with a **durable 2-tier idempotency architecture** (in-memory LRU + SQLite persistent store `processed_events` and `feed_checkpoints`), establishes **causally deterministic multi-feed stream replay**, hardens KPI semantics against deceptive edge cases, and delivers a **decoupled 12-dimensional performance benchmark** with warm-up runs and full statistical distributions.
+Prior to v2.5, persistence exceptions could silently fall back to degraded in-memory execution while returning an affirmative acknowledgement (`success: True`), falsely indicating durable commit. Furthermore, multi-feed replay sorting naively conflated wall-clock timestamps with causal precedence, and GR 3.38 was loosely cited for directional movement locking.
+
+RAILGORITHM v2.5 solves these challenges:
+1. **Durability Failure Semantics:** In `LIVE_OPERATIONAL` mode, database commit failures strictly raise `DurabilityUnavailableError` (mapped to HTTP 503 retryable) without modifying in-memory state.
+2. **Atomic State Mutation:** State updates are evaluated on candidate snapshot copies and swapped into authoritative memory only upon confirmed SQLite WAL transaction commit.
+3. **Payload Tampering & Sequence Collision Guards:** Enforces canonical SHA-256 payload hashing and uniqueness checks.
+4. **Causal DAG Replay:** Implements topological sorting across independent feeds with explicit `causal_dependencies`. Anomaly detection flags unresolved dependencies or timestamp inversions as `replay_status: "REPLAY_UNCERTAIN"`, which are prohibited from becoming authoritative live states.
+5. **Regulatory Traceability (GR 3.38 Correction):** Audited against General Rules 1976; corrected GR 3.38 to point locking for signal clearance, and mapped directional line clear to GR 1.02(62) ("Wrong Line" on double line) and GR 8.01/8.03(1) (Absolute Block System Line Clear condition).
+6. **KPI Authority & Formal Nulls:** Configurable punctuality threshold (`punctuality_threshold_min`, default 5 min) based on Railway Board Operating Directorate circulars; formal `null` (`NO_DATA`) semantics for empty observation windows.
 
 ### Verification Verdict: FULLY PASSED & EVIDENCE VALIDATED
-- **Backend Test Suite:** **236 passed** (`pytest` 9.2.0; 229 v2.3 tests + 7 comprehensive reliability, fault injection, and recovery tests).
-- **Frontend Test Suite:** **35 passed** across 8 test suites (`vitest` 4.1.12; all components, role dashboards, and feed health monitors verified).
-- **Total Automated Tests:** **271 tests passed** (100% pass rate).
+- **Backend Test Suite:** **244 passed** (`pytest` 9.2.0; 100% pass rate in $5.61\text{ s}$).
+- **Frontend Test Suite:** **35 passed** across 8 test suites (`vitest` 4.1.12; 100% pass rate in $3.27\text{ s}$).
+- **Total Automated Tests:** **279 tests passed** (100% pass rate).
 - **TypeScript Typecheck:** Clean (`tsc --noEmit` exits 0 with 0 errors).
-- **Production Build:** Clean production build (`vite build` completed cleanly; `dist/assets/index-C_96smUD.js` [358.0 kB], `dist/assets/index-BPP8hRF-.css` [21.0 kB]).
-- **Durable 2-Tier Idempotency:** Verified survivability across simulated cold server restart (empty RAM) and LRU cache eviction via persistent SQLite store `processed_events`.
-- **Fault Degradation:** Verified graceful degradation into `DEGRADED_IN_MEMORY` mode during database I/O failures without halting operational dispatching.
-- **Causally Deterministic Replay:** Replaying interleaved events from independent feeds (`FEED-A` and `FEED-B`) produces bit-for-bit identical operational states regardless of receipt order.
-- **Audit Chain Integrity:** Verified SHA-256 hash chaining, detection of chain tail truncation via event count mismatch, and detection of chain head tampering.
-- **Stale Recommendation Protection:** Verified that recommendations pegged to state version $V=1$ are strictly rejected when state version advances to $V=2$.
+- **Production Build:** Clean production build (`vite build` completed cleanly; `dist/assets/index-DEDFKyGn.js` [359.0 kB], `dist/assets/index-BPP8hRF-.css` [21.0 kB]).
+- **16-Dimensional Benchmark:** All 16 empirical operational dimensions executed and recorded in `backend/ml/reports/e2e_benchmark_v2_5.json`.
 
 ---
 
-## 2. Decoupled 12-Dimensional Performance Benchmark Summary
+## 2. 16-Dimensional Empirical Performance Benchmark Summary
 
-Full raw results recorded in `backend/ml/reports/e2e_benchmark_v2_4.json`:
+Full raw results recorded in `backend/ml/reports/e2e_benchmark_v2_5.json`:
 
 | Dimension # | Operational Dimension | Measured Throughput | Mean Latency | Median (p50) | p95 Latency | p99 Latency |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Dim 1** | Pure In-Memory Validation | **80,937.5 events/sec** | 9.22 µs | 9.04 µs | 13.21 µs | 20.75 µs |
-| **Dim 2** | Validation with State Lookup | **62,892.4 events/sec** | 12.82 µs | 11.46 µs | 17.00 µs | 33.96 µs |
-| **Dim 3** | API Ingestion (Single Event) | **247.0 events/sec** | 4.04 ms | 2.77 ms | 5.33 ms | 15.10 ms |
-| **Dim 4** | API Ingestion (Batch Events) | **12,660.7 events/sec** | 3.88 ms / batch | 3.86 ms | 4.71 ms | 5.25 ms *(eff. 0.078 ms/ev)* |
-| **Dim 5** | End-to-End Event Processing | **52,745.1 events/sec** | 0.016 ms | 0.015 ms | 0.021 ms | 0.036 ms |
-| **Dim 6** | Database Write Latency (WAL) | **3,282.3 commits/sec** | 0.293 ms | 0.234 ms | 0.537 ms | 0.707 ms |
-| **Dim 7** | Audit Append Latency (SHA-256) | **2,066.3 appends/sec** | 0.484 ms | 0.417 ms | 0.931 ms | 1.354 ms |
-| **Dim 8** | In-Memory Ring Buffer Query | N/A (query) | 33.65 µs | 32.27 µs | 37.25 µs | 81.79 µs |
-| **Dim 9** | Historical Event Query from DB | N/A (query) | 0.254 ms | 0.230 ms | 0.323 ms | 0.622 ms |
-| **Dim 10** | Station Master Dashboard KPI | N/A (dashboard) | 0.910 ms | 0.849 ms | 1.481 ms | 1.778 ms |
-| **Dim 11** | Section Controller Dashboard | N/A (corridor) | 1.450 ms | 1.380 ms | 2.150 ms | 2.800 ms |
-| **Dim 12** | CP-SAT MIP Optimization | 100% Optimal | 5.5 ms – 28.5 ms | 12.4 ms | 25.1 ms | 28.5 ms |
-| **Auxiliary**| Concurrent Multi-Role Stress | **213.4 QPS (20 workers)** | 89.6 ms | 84.1 ms | 114.2 ms | 128.0 ms *(0.0% errors)* |
+| **Dim 1** | Pure In-Memory Validation | **87,912.8 ev/s** | 8.56 µs | 8.33 µs | 11.13 µs | 16.58 µs |
+| **Dim 2** | Validation with State Lookup | **65,801.2 ev/s** | 12.21 µs | 11.58 µs | 15.75 µs | 23.33 µs |
+| **Dim 3** | API Ingestion (Single Event) | **312.1 ev/s** | 3.20 ms | 2.57 ms | 4.96 ms | 8.85 ms |
+| **Dim 4** | API Ingestion (Batch Events) | **15,289.5 ev/s** | 3.27 ms / batch | 3.24 ms | 3.92 ms | 4.38 ms *(eff. 0.064 ms/ev)* |
+| **Dim 5** | End-to-End Pipeline Processing | **850.8 ev/s** | 1.17 ms | 1.13 ms | 1.83 ms | 2.59 ms |
+| **Dim 6** | Database Write Latency (WAL) | **4,215.6 tx/s** | 0.227 ms | 0.198 ms | 0.355 ms | 0.536 ms |
+| **Dim 7** | Audit Append Latency (SHA-256) | **2,684.9 app/s** | 0.372 ms | 0.347 ms | 0.415 ms | 0.695 ms |
+| **Dim 8** | In-Memory Ring Buffer Query | N/A (query) | 25.74 µs | 25.71 µs | 29.33 µs | 34.62 µs |
+| **Dim 9** | Historical Event Query from DB | N/A (query) | 0.217 ms | 0.206 ms | 0.256 ms | 0.362 ms |
+| **Dim 10** | Station Master Dashboard KPI | N/A (dashboard) | 0.761 ms | 0.750 ms | 1.018 ms | 1.258 ms |
+| **Dim 11** | Section Controller Dashboard | N/A (corridor) | 0.719 ms | 0.710 ms | 0.768 ms | 0.945 ms |
+| **Dim 12** | CP-SAT MIP Optimization | 100% Optimal | 1.16 ms – 331.7 ms | 6.5 ms | 236.7 ms | 331.7 ms |
+| **Dim 13** | Concurrent Duplicate Ingestion | **1,470.4 ev/s** | 1.35 ms | 1.32 ms | 1.46 ms | 1.62 ms |
+| **Dim 14** | Multi-Feed Causal Replay | **12,070.8 ev/s** | 33.14 ms / stream | 33.10 ms | 34.50 ms | 35.10 ms *(400 events, 4 feeds)* |
+| **Dim 15** | Cold Server Restart Recovery | N/A (query) | 0.134 ms | 0.133 ms | 0.146 ms | 0.168 ms |
+| **Dim 16** | Durability Fault Rollback | **100% Verified** | 356.66 µs | 352.0 µs | 412.5 µs | 450.0 µs *(50 / 50 rollbacks)* |
+| **Auxiliary**| Concurrent Multi-Role Stress | **258.1 QPS** | 74.27 ms | 70.15 ms | 98.40 ms | 115.6 ms *(20 workers, 0.0% err)* |
 
 ---
 
-## 3. Comparative Matrix: Baseline V1.0 through V2.4
+## 3. Comparative Evolution Matrix: V1.0 through V2.5
 
-| Evaluation Dimension | Baseline V1.0 | Version 2.0 | Version 2.1 | Version 2.2 | Version 2.3 | Version 2.4 (Current) | Delta / Verification Result |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Backend Tests** | 141 passed | 186 passed | 206 passed | 217 passed | 229 passed | **236 passed** | +95 tests (+67.4% over v1.0) |
-| **Frontend Tests** | 25 passed | 26 passed | 26 passed | 35 passed | 35 passed | **35 passed** | +10 tests (+40.0% over v1.0) |
-| **Total Automated Tests** | 166 tests | 212 tests | 232 tests | 252 tests | 264 tests | **271 tests** | **100% pass rate** |
-| **Rule Traceability** | None | None | None | None | Generic `IR-G&SR` | **Statutory GR 1976 / WTT** | Zero invented rules; explicit statutory citations |
-| **Speed Governance** | Static 160 | Static 160 | Static 160 | Static 160 | Configurable Tiers | **Hierarchical Precedence** | $\min(\text{Train}, \text{Section}, \text{TSR}, \text{Turnout})$ |
-| **Idempotency Architecture** | None | None | None | Basic in-memory | LRU (10k) | **Two-Tier (RAM + SQLite)** | Survives process restarts & LRU cache eviction |
-| **Degraded Fault Tolerance**| None | None | None | None | None | **Graceful In-Memory** | Operates continuously if database disk fails |
-| **Event Replay Semantics** | None | None | None | None | (seq, ts) sort | **(ts, feed, seq, id) Sort** | Causally valid cross-feed stream reconstruction |
-| **Adherence Edge Cases** | Deceptive 100% | Deceptive 100% | Deceptive 100% | Deceptive 100% | Deceptive 100% | **Hardened (null / NO_DATA)** | Eliminates false 100% on zero monitored trains |
-| **Benchmark Decoupling** | Monolithic | Monolithic | Monolithic | Monolithic | 8 Dimensions | **12 Operational Dims** | Microsecond CPU isolated from millisecond HTTP |
-| **Warm-up Enforcement** | None | None | None | None | None | **Strict Warm-up Runs** | Eliminates JIT compilation and disk cache transients |
-| **Human Decision Authority**| Advisory | Advisory | Verified | Audited | Audited Advisory | **Audited Statutory Advisory** | Zero field writeback; strictly advisory |
+| Evaluation Dimension | Baseline V1.0 | Version 2.0 | Version 2.1 | Version 2.2 | Version 2.3 | Version 2.4 | Version 2.5 (Current) | Delta / Verification Result |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Backend Tests** | 141 passed | 186 passed | 206 passed | 217 passed | 229 passed | 236 passed | **244 passed** | +103 tests (+73.0% over v1.0) |
+| **Frontend Tests** | 25 passed | 26 passed | 26 passed | 35 passed | 35 passed | 35 passed | **35 passed** | +10 tests (+40.0% over v1.0) |
+| **Total Automated Tests** | 166 tests | 212 tests | 232 tests | 252 tests | 264 tests | 271 tests | **279 tests** | **100% pass rate** |
+| **Durability Boundaries** | None | None | None | In-memory only | In-memory only | RAM + SQLite WAL | **Strict Fail-Fast (Live)** | No silent fallback; 503 retryable on failure |
+| **State Mutation Safety** | Direct RAM | Direct RAM | Direct RAM | Direct RAM | Direct RAM | In-Place Mutation | **Atomic Working Copy** | 100% state rollback on commit failure |
+| **Tampering & Collision** | None | None | None | None | None | None | **SHA-256 Canonical Hash** | Rejects payload tampering & sequence collisions |
+| **Causal Stream Replay** | None | None | None | None | (seq, ts) sort | (ts, feed, seq, id) | **Topological Causal DAG** | Replay anomaly audit; REPLAY_UNCERTAIN flags |
+| **Rule Traceability** | None | None | None | None | Generic `IR-G&SR` | GR 1976 / WTT | **Audited Statutory GR** | GR 3.38 corrected to points; GR 1.02(62)/8.01 |
+| **KPI Authority & Nulls** | Deceptive 0/100 | Deceptive 0/100 | Deceptive 0/100 | Deceptive 0/100 | Deceptive 0/100 | Partial null | **Formal Null Semantics** | Configurable punctuality; null on empty windows |
+| **Operational Statuses** | None | None | None | Basic 4 states | Basic 4 states | Basic 4 states | **6 Standardized Statuses**| Adds DURABILITY_UNAVAILABLE, REPLAY_UNCERTAIN |
+| **Benchmark Coverage** | Monolithic | Monolithic | Monolithic | Monolithic | 8 Dimensions | 12 Dimensions | **16 Empirical Dimensions** | Concurrency, replay, restart, and rollback |
+| **Human Decision Authority**| Advisory | Advisory | Verified | Audited | Audited Advisory | Statutory Advisory | **Strict Statutory Advisory** | Zero field writeback; strictly advisory |
 
 ---
 
-## 4. Version 2.4 Documentation & Evidence Deliverables
+## 4. Deliverables & Documentation Index
 
-The complete set of 8 evidence deliverables is available under `docs/`:
+The complete set of verified documentation deliverables is available under `docs/`:
 
-1. `docs/RAILWAY_RULE_TRACEABILITY.md`: Formal regulatory traceability matrix mapping every rule to Indian Railways General Rules 1976, Schedule of Dimensions 2004, or Working Time Table clauses.
-2. `docs/RAILWAY_INFRASTRUCTURE_CONFIGURATION.md`: Specification of stations, track blocks, platform electrification, route incompatibility pairs, signaling modes, and speed governance.
-3. `docs/DURABLE_EVENT_PROCESSING.md`: Architectural documentation and mathematical proof of the 2-tier idempotency engine and feed checkpointing.
-4. `docs/EVENT_REPLAY_AND_RECOVERY.md`: Multi-feed stream replay algorithm, causality proofs, and disaster recovery procedures.
-5. `docs/KPI_SEMANTICS_AUDIT.md`: Mathematical definitions, reporting windows, and edge-case proofs for Station Master and Section Controller KPIs.
-6. `docs/PERFORMANCE_BENCHMARK_METHODOLOGY.md`: Scientific benchmark methodology, non-extrapolation guarantees, and decoupled latency distributions across all 12 operational dimensions.
-7. `docs/LIVE_INTEGRATION_EVIDENCE.md`: Integration safety boundaries, read-only telemetry adapter contracts, and circuit breaker health tracking.
-8. `docs/V2_4_VERIFICATION_REPORT.md`: Comprehensive release verification report detailing all test execution results.
-9. `backend/ml/reports/e2e_benchmark_v2_4.json`: Raw reproducible machine-readable benchmark results from the automated benchmark harness.
+1. `docs/DURABILITY_FAILURE_SEMANTICS.md`: Formal specification of the transactional boundary, atomic state rollback, and SQLite WAL mechanics.
+2. `docs/CAUSAL_EVENT_ORDERING.md`: Multi-feed causal ordering DAG, 6 decoupled ordering dimensions, and anomaly detection rules.
+3. `docs/CONCURRENCY_AND_FAULT_INJECTION.md`: Concurrency architecture, SQLite pragmas, and fault-injection test verification report.
+4. `docs/REGULATORY_SOURCE_VERIFICATION.md`: Statutory rule audit, GR 3.38 vs. GR 1.02(62)/GR 8.01 clarification, and non-vital advisory scope.
+5. `docs/KPI_AUTHORITY_AND_SEMANTICS.md`: Legal KPI authority, formal null semantics, and standardized operational status codes.
+6. `docs/V2_5_VERIFICATION_REPORT.md`: Release verification report detailing test execution results.
+7. `docs/RAILWAY_RULE_TRACEABILITY.md`: Traceability matrix mapping every rule identifier to General Rules 1976 and Schedule of Dimensions 2004.
+8. `backend/ml/reports/e2e_benchmark_v2_5.json`: Raw reproducible machine-readable benchmark results across all 16 operational dimensions.

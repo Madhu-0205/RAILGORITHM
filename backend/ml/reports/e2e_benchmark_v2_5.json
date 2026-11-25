@@ -1,0 +1,552 @@
+{
+  "report_title": "RAILGORITHM 2.5 Comprehensive End-to-End Performance & Domain Reliability Benchmark",
+  "benchmark_version": "v2.5",
+  "generated_at": "2026-11-25T14:01:48.630502+00:00",
+  "hardware_environment": {
+    "system": "Darwin",
+    "release": "27.2.0",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.14.7",
+    "logical_cores": 6,
+    "chipset": "Apple Silicon (arm64, macOS)",
+    "memory_gb": 8.0
+  },
+  "operational_dimensions": {
+    "dim1_pure_in_memory_validation": {
+      "dimension": 1,
+      "name": "Pure In-Memory Railway Validation",
+      "scope": "Syntactic, schema, timestamp drift and speed-ceiling validation without state querying",
+      "event_count": 5000,
+      "warmup_count": 500,
+      "total_wall_time_s": 0.0569,
+      "throughput_events_per_sec": 87912.8,
+      "latency_microseconds": {
+        "count": 5000,
+        "mean": 8.5631,
+        "p50": 9.4795,
+        "p95": 11.125,
+        "p99": 19.2513,
+        "min": 2.416,
+        "max": 101.125,
+        "std_dev": 3.6575,
+        "unit": "microseconds"
+      }
+    },
+    "dim2_state_lookup_validation": {
+      "dimension": 2,
+      "name": "In-Memory Validation with Railway State Lookup",
+      "scope": "Evaluates train speed limits (WTT), section limits, direction lock (GR 1.02), and block exclusivity (GR 8.01)",
+      "event_count": 5000,
+      "warmup_count": 500,
+      "total_wall_time_s": 0.076,
+      "throughput_events_per_sec": 65801.2,
+      "latency_microseconds": {
+        "count": 5000,
+        "mean": 12.2057,
+        "p50": 11.2295,
+        "p95": 15.75,
+        "p99": 26.0008,
+        "min": 2.666,
+        "max": 98.083,
+        "std_dev": 3.5019,
+        "unit": "microseconds"
+      }
+    },
+    "dim3_api_ingestion_single": {
+      "dimension": 3,
+      "name": "API Ingestion Throughput (Single Event)",
+      "scope": "Full HTTP request lifecycle via FastAPI TestClient (JSON parsing, auth verification, validation, deduplication)",
+      "count": 500,
+      "warmup_count": 50,
+      "wall_time_s": 1.602,
+      "throughput_events_per_sec": 312.1,
+      "latency_ms": {
+        "count": 500,
+        "mean": 3.201,
+        "p50": 2.38,
+        "p95": 4.9607,
+        "p99": 12.6089,
+        "min": 2.0321,
+        "max": 70.9036,
+        "std_dev": 5.0818,
+        "unit": "ms"
+      }
+    },
+    "dim4_api_ingestion_batch": {
+      "dimension": 4,
+      "name": "API Ingestion Throughput (Batch Events)",
+      "scope": "Bulk ingest endpoint /events/batch processing amortized per-event throughput",
+      "batches": 20,
+      "batch_size": 50,
+      "total_events": 1000,
+      "wall_time_s": 0.0654,
+      "throughput_events_per_sec": 15289.5,
+      "batch_request_latency_ms": {
+        "count": 20,
+        "mean": 3.2153,
+        "p50": 3.1424,
+        "p95": 3.531,
+        "p99": 3.5436,
+        "min": 3.0077,
+        "max": 3.5468,
+        "std_dev": 0.1906,
+        "unit": "ms"
+      },
+      "effective_per_event_latency_ms": 0.0643
+    },
+    "dim5_end_to_end_event_processing": {
+      "dimension": 5,
+      "name": "End-to-End Event Processing Throughput",
+      "scope": "Raw Ingestion -> Railway Validator -> Normalization -> State Mutation -> Conflict Detection -> LRU Dedup",
+      "event_count": 1000,
+      "warmup_count": 100,
+      "total_wall_time_s": 1.1754,
+      "throughput_events_per_sec": 850.8,
+      "latency_ms": {
+        "count": 1000,
+        "mean": 1.1715,
+        "p50": 1.1724,
+        "p95": 1.8269,
+        "p99": 2.0337,
+        "min": 0.2855,
+        "max": 3.3248,
+        "std_dev": 0.4637,
+        "unit": "ms"
+      }
+    },
+    "dim6_database_write_latency": {
+      "dimension": 6,
+      "name": "Database Write Latency (SQLite WAL Mode)",
+      "scope": "Durable commit of ProcessedEventRecord into SQLite backing store with write-ahead logging",
+      "transaction_count": 100,
+      "warmup_count": 10,
+      "total_wall_time_s": 0.0237,
+      "throughput_transactions_per_sec": 4215.6,
+      "latency_ms": {
+        "count": 100,
+        "mean": 0.227,
+        "p50": 0.2073,
+        "p95": 0.3548,
+        "p99": 0.5404,
+        "min": 0.1765,
+        "max": 0.6367,
+        "std_dev": 0.0726,
+        "unit": "ms"
+      }
+    },
+    "dim7_audit_event_append_latency": {
+      "dimension": 7,
+      "name": "Audit Event Append Latency (SHA-256 Hash Chain)",
+      "scope": "Append-only SHA-256 hash chaining with chain head serialization and SQLite commit",
+      "transaction_count": 100,
+      "warmup_count": 10,
+      "total_wall_time_s": 0.0372,
+      "throughput_transactions_per_sec": 2684.9,
+      "latency_ms": {
+        "count": 100,
+        "mean": 0.3724,
+        "p50": 0.3555,
+        "p95": 0.4149,
+        "p99": 0.9081,
+        "min": 0.3252,
+        "max": 0.9368,
+        "std_dev": 0.0846,
+        "unit": "ms"
+      }
+    },
+    "dim8_in_memory_event_buffer_query": {
+      "dimension": 8,
+      "name": "In-Memory Event Buffer Query Latency",
+      "scope": "Querying acknowledged event sequence window from FeedManager bounded ring buffer",
+      "buffer_size": 500,
+      "query_count": 500,
+      "warmup_count": 50,
+      "total_wall_time_s": 0.013,
+      "latency_microseconds": {
+        "count": 500,
+        "mean": 25.7428,
+        "p50": 25.709,
+        "p95": 29.3331,
+        "p99": 31.5096,
+        "min": 21.917,
+        "max": 36.458,
+        "std_dev": 2.2557,
+        "unit": "microseconds"
+      }
+    },
+    "dim9_historical_event_query_db": {
+      "dimension": 9,
+      "name": "Historical Event Query Latency (Database)",
+      "scope": "Indexed range query for persistent ProcessedEventRecord entries from SQLite database",
+      "query_count": 100,
+      "warmup_count": 10,
+      "total_wall_time_s": 0.0217,
+      "latency_ms": {
+        "count": 100,
+        "mean": 0.2169,
+        "p50": 0.2062,
+        "p95": 0.2557,
+        "p99": 0.3765,
+        "min": 0.1988,
+        "max": 0.656,
+        "std_dev": 0.0494,
+        "unit": "ms"
+      }
+    },
+    "dim10_station_master_dashboard": {
+      "dimension": 10,
+      "name": "Station Master Dashboard Generation Latency",
+      "scope": "Station platform berths, approaching train schedule adherence, and station-scoped alerts",
+      "scenario": "evening_peak (12 trains, MLG 3 platforms)",
+      "iterations": 100,
+      "warmup_count": 10,
+      "total_wall_time_s": 0.0764,
+      "latency_ms": {
+        "count": 100,
+        "mean": 0.7613,
+        "p50": 0.7501,
+        "p95": 1.0176,
+        "p99": 1.2405,
+        "min": 0.689,
+        "max": 1.3895,
+        "std_dev": 0.121,
+        "unit": "ms"
+      }
+    },
+    "dim11_section_controller_dashboard": {
+      "dimension": 11,
+      "name": "Section Controller Dashboard Generation Latency",
+      "scope": "Corridor-wide running line occupancy, throat bottleneck load, delay propagation index (DPI), knock-on risk",
+      "scenario": "evening_peak (12 trains, 4 sections)",
+      "iterations": 100,
+      "warmup_count": 10,
+      "total_wall_time_s": 0.0722,
+      "latency_ms": {
+        "count": 100,
+        "mean": 0.7186,
+        "p50": 0.7097,
+        "p95": 0.7679,
+        "p99": 0.7782,
+        "min": 0.6776,
+        "max": 0.9912,
+        "std_dev": 0.0415,
+        "unit": "ms"
+      }
+    },
+    "dim12_optimization_by_size_and_profile": {
+      "dimension": 12,
+      "name": "CP-SAT MIP Optimization Latency by Size and Profile",
+      "scope": "Google OR-Tools CP-SAT discrete optimization across 3 scenario sizes and 4 operational objectives",
+      "iterations_per_combination": 2,
+      "scenarios": {
+        "normal_traffic": {
+          "scenario_label": "Small (4 trains)",
+          "profiles": {
+            "balanced": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 14069.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 28.7614,
+                "p50": 28.7614,
+                "p95": 49.3496,
+                "p99": 51.1797,
+                "min": 5.8855,
+                "max": 51.6372,
+                "std_dev": 32.3513,
+                "unit": "ms"
+              }
+            },
+            "delay_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 22623.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 6.5722,
+                "p50": 6.5722,
+                "p95": 6.9963,
+                "p99": 7.034,
+                "min": 6.101,
+                "max": 7.0434,
+                "std_dev": 0.6664,
+                "unit": "ms"
+              }
+            },
+            "priority_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 14062.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 6.4578,
+                "p50": 6.4578,
+                "p95": 6.5969,
+                "p99": 6.6092,
+                "min": 6.3033,
+                "max": 6.6123,
+                "std_dev": 0.2186,
+                "unit": "ms"
+              }
+            },
+            "throughput_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 11148.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 6.2716,
+                "p50": 6.2716,
+                "p95": 6.2802,
+                "p99": 6.2809,
+                "min": 6.262,
+                "max": 6.2811,
+                "std_dev": 0.0135,
+                "unit": "ms"
+              }
+            }
+          }
+        },
+        "single_line_meet": {
+          "scenario_label": "Medium (6 trains)",
+          "profiles": {
+            "balanced": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 4536.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 1.5348,
+                "p50": 1.5348,
+                "p95": 1.5997,
+                "p99": 1.6055,
+                "min": 1.4627,
+                "max": 1.607,
+                "std_dev": 0.102,
+                "unit": "ms"
+              }
+            },
+            "delay_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 7272.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 1.1624,
+                "p50": 1.1624,
+                "p95": 1.1744,
+                "p99": 1.1755,
+                "min": 1.1489,
+                "max": 1.1758,
+                "std_dev": 0.019,
+                "unit": "ms"
+              }
+            },
+            "priority_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 4536.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 1.2635,
+                "p50": 1.2635,
+                "p95": 1.326,
+                "p99": 1.3316,
+                "min": 1.194,
+                "max": 1.333,
+                "std_dev": 0.0983,
+                "unit": "ms"
+              }
+            },
+            "throughput_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 3618.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 1.3356,
+                "p50": 1.3356,
+                "p95": 1.3429,
+                "p99": 1.3435,
+                "min": 1.3275,
+                "max": 1.3437,
+                "std_dev": 0.0114,
+                "unit": "ms"
+              }
+            }
+          }
+        },
+        "evening_peak": {
+          "scenario_label": "Heavy (12 trains)",
+          "profiles": {
+            "balanced": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 87300.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 178.6319,
+                "p50": 178.6319,
+                "p95": 179.8157,
+                "p99": 179.9209,
+                "min": 177.3165,
+                "max": 179.9472,
+                "std_dev": 1.8603,
+                "unit": "ms"
+              }
+            },
+            "delay_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 140020.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 331.7086,
+                "p50": 331.7086,
+                "p95": 332.0577,
+                "p99": 332.0887,
+                "min": 331.3208,
+                "max": 332.0965,
+                "std_dev": 0.5485,
+                "unit": "ms"
+              }
+            },
+            "priority_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 87168.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 236.6885,
+                "p50": 236.6885,
+                "p95": 238.0708,
+                "p99": 238.1937,
+                "min": 235.1527,
+                "max": 238.2244,
+                "std_dev": 2.1721,
+                "unit": "ms"
+              }
+            },
+            "throughput_focused": {
+              "status": "OPTIMAL",
+              "is_optimal": true,
+              "mean_objective": 69156.0,
+              "solve_time_ms": {
+                "count": 2,
+                "mean": 177.2876,
+                "p50": 177.2876,
+                "p95": 177.3736,
+                "p99": 177.3813,
+                "min": 177.192,
+                "max": 177.3832,
+                "std_dev": 0.1352,
+                "unit": "ms"
+              }
+            }
+          }
+        }
+      }
+    },
+    "dim13_concurrent_duplicate_ingestion": {
+      "name": "Concurrent Duplicate Processing & Idempotency",
+      "total_races": 50,
+      "total_events_processed": 100,
+      "total_wall_time_s": 0.068,
+      "throughput_events_per_sec": 1470.4,
+      "latency_ms": {
+        "count": 50,
+        "mean": 1.3459,
+        "p50": 1.3476,
+        "p95": 1.461,
+        "p99": 1.5684,
+        "min": 1.2162,
+        "max": 1.5773,
+        "std_dev": 0.0842,
+        "unit": "ms"
+      }
+    },
+    "dim14_multi_feed_causal_replay": {
+      "name": "Multi-Feed Causal Topological Replay",
+      "stream_size": 400,
+      "iterations": 5,
+      "total_events_replayed": 2000,
+      "causal_integrity": "DETERMINISTIC_CAUSAL",
+      "replay_status": "REPLAY_VERIFIED",
+      "throughput_events_per_sec": 12070.8,
+      "latency_ms": {
+        "count": 5,
+        "mean": 33.1373,
+        "p50": 1.9207,
+        "p95": 126.967,
+        "p99": 151.9588,
+        "min": 1.761,
+        "max": 158.2067,
+        "std_dev": 69.916,
+        "unit": "ms"
+      }
+    },
+    "dim15_restart_recovery_latency": {
+      "name": "Cold Server Restart Recovery & Persistent Idempotency",
+      "preloaded_events": 100,
+      "queries_sampled": 50,
+      "latency_ms": {
+        "count": 50,
+        "mean": 0.1342,
+        "p50": 0.133,
+        "p95": 0.1456,
+        "p99": 0.1789,
+        "min": 0.1241,
+        "max": 0.1952,
+        "std_dev": 0.0119,
+        "unit": "ms"
+      }
+    },
+    "dim16_durability_fault_rollback": {
+      "name": "Durability Fault Injection & Atomic State Rollback",
+      "iterations": 50,
+      "rollbacks_verified": 50,
+      "rollback_success_pct": 100.0,
+      "latency_microseconds": {
+        "count": 50,
+        "mean": 356.6592,
+        "p50": 307.7495,
+        "p95": 459.6043,
+        "p99": 1206.2218,
+        "min": 276.917,
+        "max": 1696.875,
+        "std_dev": 204.9869,
+        "unit": "\u00b5s"
+      }
+    }
+  },
+  "concurrency_stress_test": {
+    "name": "Concurrent Multi-Role API Stress Test",
+    "concurrency_level": 20,
+    "total_operations": 100,
+    "successful_operations": 100,
+    "failed_operations": 0,
+    "error_rate_pct": 0.0,
+    "total_wall_time_s": 0.3874,
+    "throughput_qps": 258.1,
+    "latency_ms": {
+      "count": 100,
+      "mean": 74.2741,
+      "p50": 75.1324,
+      "p95": 97.5593,
+      "p99": 110.5325,
+      "min": 34.361,
+      "max": 112.3939,
+      "std_dev": 15.457,
+      "unit": "ms"
+    }
+  },
+  "methodological_guarantees": {
+    "warmup_runs_enforced": true,
+    "hardware_metadata_documented": true,
+    "decoupled_micro_vs_macro_benchmarks": true,
+    "durability_and_causal_integrity_measured": true,
+    "zero_extrapolation_policy": "All reported values are directly measured; microsecond in-memory validation is never extrapolated to represent HTTP API throughput."
+  }
+}

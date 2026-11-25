@@ -151,16 +151,16 @@ export function DashboardPage() {
             <KpiCard
               label="Avg Arrival Delay"
               value={numberOrDash(stationKpiData.kpis.average_arrival_delay_min)}
-              unit=" min"
-              hint="approaching trains"
-              tone={stationKpiData.kpis.average_arrival_delay_min > 10 ? "bad" : "good"}
+              unit={stationKpiData.kpis.average_arrival_delay_min !== null ? " min" : ""}
+              hint={stationKpiData.kpis.average_arrival_delay_min !== null ? "approaching trains" : "no approaching trains"}
+              tone={stationKpiData.kpis.average_arrival_delay_min === null ? "neutral" : stationKpiData.kpis.average_arrival_delay_min > 10 ? "bad" : "good"}
             />
             <KpiCard
               label="Avg Departure Delay"
               value={numberOrDash(stationKpiData.kpis.average_departure_delay_min)}
-              unit=" min"
-              hint="stationed departures"
-              tone={stationKpiData.kpis.average_departure_delay_min > 10 ? "bad" : "good"}
+              unit={stationKpiData.kpis.average_departure_delay_min !== null ? " min" : ""}
+              hint={stationKpiData.kpis.average_departure_delay_min !== null ? "stationed departures" : "no stationed trains"}
+              tone={stationKpiData.kpis.average_departure_delay_min === null ? "neutral" : stationKpiData.kpis.average_departure_delay_min > 10 ? "bad" : "good"}
             />
             <KpiCard
               label="Station Alerts & Recs"
@@ -364,7 +364,7 @@ export function DashboardPage() {
               label="Throughput & Recovery"
               value={numberOrDash(sectionKpiData.kpis.throughput_trains_per_hour)}
               unit=" tph"
-              hint={`Recovery clear rate: ${sectionKpiData.kpis.recovery_clearance_rate_pct}%`}
+              hint={sectionKpiData.kpis.recovery_clearance_rate_pct !== null ? `Recovery clear rate: ${sectionKpiData.kpis.recovery_clearance_rate_pct}%` : "No historical conflicts recorded"}
             />
           </div>
 

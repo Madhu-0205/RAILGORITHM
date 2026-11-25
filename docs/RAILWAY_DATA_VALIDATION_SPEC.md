@@ -5,7 +5,7 @@
 This specification defines the formal validation invariants, infrastructure constraints, rolling stock rules, and physical safety limits enforced on all incoming telemetry events ingested into **RAILGORITHM 2.3**.
 
 The validation rules are modeled after standard operating practices of Indian Railways (IR), including:
-- **IR-G&SR**: Indian Railways General and Subsidiary Rules (Rule 3.38, 4.08, 4.09).
+- **IR-G&SR**: Indian Railways General and Subsidiary Rules (Rule 1.02(62) Wrong Line, 4.08, 4.09, 8.01/8.03(1) Absolute Block).
 - **IR-OM**: Operating Manual for Railway Traffic (Block Working & Headway).
 - **Hard Constraints (HC-001 to HC-006)**: Mathematical non-negotiable invariants defined in the RAILGORITHM Constraint Specification.
 
@@ -49,9 +49,11 @@ In double-line sections, track circuits are electrically interlocked for unidire
 - **UP Line Blocks** (suffixed with `U`, e.g., `B2U`): Exclusively dedicated to trains moving in the `UP` direction ($+x$ axis, Kalyan $\to$ Kasara).
 - **DOWN Line Blocks** (suffixed with `D`, e.g., `B2D`): Exclusively dedicated to trains moving in the `DOWN` direction ($-x$ axis, Kasara $\to$ Kalyan).
 
-**Invariant**: Under `IR-G&SR-3.38`, no train may occupy a unidirectional block against the established direction of traffic:
+**Invariant**: Under `GR-1.02(62)` (Wrong Line on double line) and `GR-8.01/8.03(1)` (Absolute Block System: Line Clear condition), no train may occupy a unidirectional block against the established direction of traffic:
 
 $$\text{Direction}(\text{Train}) == \text{PermittedDirection}(\text{Block})$$
+
+*(Note: In General Rules 1976, GR 3.38 governs points locking and conditions for taking 'off' signals; directional line clear is governed by GR 1.02(62) and GR 8.01/8.03(1)).*
 
 Any reported movement violating this invariant is rejected with `WRONG_DIRECTION_ENTRY`.
 
@@ -114,7 +116,7 @@ The following matrix documents all 21 standardized reason codes enforced by `Rai
 | `TRAIN_SPEED_LIMIT_EXCEEDED` | Kinematic | Speed $>$ Train Category MPS (e.g. Freight $> 75$) | `IR-G&SR-4.08` | Rejected to contradiction buffer. |
 | `SECTION_SPEED_LIMIT_EXCEEDED` | Kinematic | Speed $>$ Sectional MPS (e.g. Sec 1 $> 100$) | `IR-G&SR-4.09` | Rejected to contradiction buffer. |
 | `TSR_SPEED_LIMIT_EXCEEDED` | Kinematic | Speed $>$ Active Temporary Speed Restriction | `IR-G&SR-4.09-TSR` | Rejected to contradiction buffer. |
-| `WRONG_DIRECTION_ENTRY` | Interlocking | Train direction opposed to unidirectional block | `IR-G&SR-3.38` | Rejected; safety alert raised. |
+| `WRONG_DIRECTION_ENTRY` | Interlocking | Train direction opposed to unidirectional block | `GR-1.02(62)-GR-8.01` | Rejected; safety alert raised. |
 | `UNMATCHED_BLOCK_EXIT` | State Tracking | Train exiting block it was never recorded in | `IR-G&SR-BLOCK-CONT` | Rejected to contradiction buffer. |
 | `HEADWAY_VIOLATION` | Separation | Time delta between consecutive trains $< 180\text{ s}$ | `HC-002` | Rejected; conflict alert raised. |
 | `JUNCTION_THROAT_OVERFLOW` | Interlocking | Simultaneous throat occupancy $> 2$ trains | `HC-006` | Rejected; interlocking lock held. |
