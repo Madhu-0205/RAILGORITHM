@@ -9,6 +9,7 @@ from collections import deque
 
 from .models import (
     ContradictionRecord,
+    EnvironmentMode,
     FeedHealthMetrics,
     FeedStatus,
     IngestionValidationResult,
@@ -29,16 +30,27 @@ class OperationalFeedManager:
         # In-memory feeds state: feed_id -> dict
         self._feeds: dict[str, dict[str, Any]] = {}
         # Rolling event buffers
-        self._event_buffer: deque[NormalizedMovementEvent] = deque(maxlen=2000)
-        self._contradiction_buffer: deque[ContradictionRecord] = deque(maxlen=500)
+        self._event_buffer: deque[NormalizedMovementEvent] = deque(maxlen=5000)
+        self._contradiction_buffer: deque[ContradictionRecord] = deque(maxlen=1000)
         # Latency samples for rolling mean
-        self._latency_samples: deque[float] = deque(maxlen=1000)
+        self._latency_samples: deque[float] = deque(maxlen=2000)
+        # Acknowledged event ledger for audit and replay: event_id -> NormalizedMovementEvent
+        self._acknowledged_events: dict[str, NormalizedMovementEvent] = {}
 
-        # Register default operational feed
+        # Register default operational synthetic feed
         self.register_feed(
             feed_id="FEED-SIGNAL-01",
-            feed_name="Northern Corridor Signalling & Track Circuits",
+            feed_name="Northern Corridor Signalling & Track Circuits (Synthetic)",
             mode="SYNTHETIC_MOCK_FEED",
+            environment="SYNTHETIC_SIMULATION",
+        )
+
+        # Register authorized partner read-only live telemetry interface
+        self.register_feed(
+            feed_id="FEED-CRIS-COA-01",
+            feed_name="CRIS / COA Control Office Telemetry Feed (Live Advisory)",
+            mode="AUTHORIZED_EXTERNAL_FEED",
+            environment="LIVE_OPERATIONAL",
         )
 
     def register_feed(
@@ -46,6 +58,7 @@ class OperationalFeedManager:
         feed_id: str,
         feed_name: str,
         mode: str = "SYNTHETIC_MOCK_FEED",
+        environment: EnvironmentMode = "SYNTHETIC_SIMULATION",
     ) -> None:
         now = datetime.now(timezone.utc)
         self._feeds[feed_id] = {
@@ -62,6 +75,7 @@ class OperationalFeedManager:
             "reconnect_attempts": 0,
             "circuit_breaker_open": False,
             "mode": mode,
+            "environment": environment,
             "consecutive_failures": 0,
         }
 
@@ -71,6 +85,7 @@ class OperationalFeedManager:
         self._event_buffer.clear()
         self._contradiction_buffer.clear()
         self._latency_samples.clear()
+        self._acknowledged_events.clear()
         now = datetime.now(timezone.utc)
         for feed in self._feeds.values():
             feed.update({
@@ -91,30 +106,44 @@ class OperationalFeedManager:
         """Ingest, validate, and record a single raw event from a data feed."""
         feed_id = raw.feed_id
         if feed_id not in self._feeds:
-            self.register_feed(feed_id=feed_id, feed_name=f"Dynamic Feed {feed_id}")
+            self.register_feed(
+                feed_id=feed_id,
+                feed_name=f"Dynamic Feed {feed_id}",
+                environment=raw.environment,
+            )
 
         feed = self._feeds[feed_id]
         feed["events_received"] += 1
 
         # Check circuit breaker
         if feed["circuit_breaker_open"]:
-            now = datetime.now(timezone.utc)
             contradiction = ContradictionRecord(
                 id=f"CONTR-CB-{int(time.time()*1000)}",
                 contradiction_type="SCHEMA_INVALID",
+                reason_code="CIRCUIT_BREAKER_ACTIVE",
                 train_id=raw.train_id,
                 feed_id=feed_id,
                 description=f"Feed {feed_id} circuit breaker is OPEN due to elevated error rates.",
+                rule_reference="CIRCUIT-BREAKER-OPEN",
                 offending_payload=raw.model_dump(mode="json"),
             )
             return IngestionValidationResult(
                 status="SCHEMA_ERROR",
+                reason_code="CIRCUIT_BREAKER_ACTIVE",
                 message="Feed circuit breaker is open. Reconnection required.",
+                rule_reference="CIRCUIT-BREAKER-OPEN",
                 contradiction=contradiction,
             )
 
-        # Validate through IngestionValidator
-        res = self.validator.validate_and_normalize(raw)
+        # Validate through IngestionValidator with feed-expected environment
+        validator = self.validator
+        original_env = validator._expected_environment
+        try:
+            validator._expected_environment = feed["environment"]
+            res = validator.validate_and_normalize(raw)
+        finally:
+            validator._expected_environment = original_env
+
         self._latency_samples.append(res.processing_latency_ms)
 
         # Update feed stats
@@ -124,6 +153,7 @@ class OperationalFeedManager:
             feed["consecutive_failures"] = 0
             if res.event:
                 self._event_buffer.append(res.event)
+                self._acknowledged_events[res.event.event_id] = res.event
             if res.sequence_gap_detected:
                 feed["sequence_gaps"] += 1
 
@@ -223,23 +253,39 @@ class OperationalFeedManager:
             error_rate_pct=err_rate,
             reconnection_attempts=feed["reconnect_attempts"],
             circuit_breaker_open=feed["circuit_breaker_open"],
+            environment=feed["environment"],
             mode=feed["mode"],
             stale_threshold_seconds=self.stale_threshold,
             degraded_threshold_seconds=self.degraded_threshold,
         )
 
-    def get_all_feed_health(self) -> list[FeedHealthMetrics]:
-        """Return health metrics for all registered operational feeds."""
-        return [self.get_feed_health(fid) for fid in self._feeds]
+    def get_all_feed_health(self, environment: EnvironmentMode | None = None) -> list[FeedHealthMetrics]:
+        """Return health metrics for all registered feeds, optionally filtered by environment."""
+        feeds = [self.get_feed_health(fid) for fid in self._feeds]
+        if environment:
+            feeds = [f for f in feeds if f.environment == environment]
+        return feeds
 
-    def get_recent_events(self, limit: int = 50, feed_id: str | None = None) -> list[NormalizedMovementEvent]:
+    def get_recent_events(
+        self,
+        limit: int = 50,
+        feed_id: str | None = None,
+        environment: EnvironmentMode | None = None,
+    ) -> list[NormalizedMovementEvent]:
         events = list(self._event_buffer)
         if feed_id:
             events = [e for e in events if e.feed_id == feed_id]
+        if environment:
+            events = [e for e in events if e.environment == environment]
         return events[-limit:][::-1]
 
     def get_recent_contradictions(self, limit: int = 50) -> list[ContradictionRecord]:
         return list(self._contradiction_buffer)[-limit:][::-1]
+
+    def recover_event_stream(self, since_sequence_num: int = 0) -> list[NormalizedMovementEvent]:
+        """Recover acknowledged events in sequence for replay and auditing."""
+        events = list(self._acknowledged_events.values())
+        return [e for e in events if e.sequence_num >= since_sequence_num]
 
 
 # Global singleton instance

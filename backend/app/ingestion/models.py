@@ -1,7 +1,7 @@
-"""Data ingestion models and feed schemas for RAILGORITHM 2.2.
+"""Data ingestion models and feed schemas for RAILGORITHM 2.3.
 
 Defines schemas for normalized movement events, sensor signals, feed health metrics,
-and operational contradiction records.
+operational contradiction records, and environment isolation contracts.
 """
 from __future__ import annotations
 
@@ -24,12 +24,44 @@ EventType = Literal[
 
 FeedStatus = Literal["HEALTHY", "DEGRADED", "STALE", "OFFLINE"]
 
+EnvironmentMode = Literal["LIVE_OPERATIONAL", "SYNTHETIC_SIMULATION", "HISTORICAL_PLAYBACK"]
+
 ContradictionType = Literal[
     "PHYSICAL_IMPOSSIBILITY",
     "SPATIAL_TELEPORTATION",
     "MUTUAL_EXCLUSION_VIOLATION",
     "TEMPORAL_INVERSION",
     "SCHEMA_INVALID",
+    "WRONG_DIRECTION_ENTRY",
+    "UNMATCHED_BLOCK_EXIT",
+    "SPEED_LIMIT_EXCEEDED",
+    "HEADWAY_VIOLATION",
+    "JUNCTION_THROAT_OVERFLOW",
+    "ENVIRONMENT_MISMATCH",
+]
+
+ValidationReasonCode = Literal[
+    "VALID_EVENT",
+    "DUPLICATE_EVENT",
+    "TIMESTAMP_FUTURE_DRIFT",
+    "TIMESTAMP_MALFORMED",
+    "TEMPORAL_INVERSION",
+    "MISSING_REQUIRED_FIELD",
+    "TRAIN_SPEED_LIMIT_EXCEEDED",
+    "SECTION_SPEED_LIMIT_EXCEEDED",
+    "TSR_SPEED_LIMIT_EXCEEDED",
+    "PHYSICAL_IMPOSSIBILITY",
+    "WRONG_DIRECTION_ENTRY",
+    "UNMATCHED_BLOCK_EXIT",
+    "SPATIAL_DISCONTINUITY",
+    "SPATIAL_TELEPORTATION",
+    "MUTUAL_EXCLUSION_COLLISION",
+    "HEADWAY_VIOLATION",
+    "JUNCTION_THROAT_OVERFLOW",
+    "PLATFORM_CAPACITY_EXCEEDED",
+    "PLATFORM_INCOMPATIBLE",
+    "CIRCUIT_BREAKER_ACTIVE",
+    "ENVIRONMENT_MISMATCH",
 ]
 
 
@@ -45,6 +77,9 @@ class RawFeedPayload(BaseModel):
     speed_kmph: float | None = None
     delay_min: float | None = None
     signal_aspect: str | None = None
+    train_type: str | None = None
+    direction: Literal["UP", "DOWN", "BIDIRECTIONAL"] | None = None
+    environment: EnvironmentMode = "SYNTHETIC_SIMULATION"
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -61,6 +96,9 @@ class NormalizedMovementEvent(BaseModel):
     speed_kmph: float | None = None
     delay_min: float | None = None
     signal_aspect: str | None = None
+    train_type: str | None = None
+    direction: Literal["UP", "DOWN", "BIDIRECTIONAL"] | None = None
+    environment: EnvironmentMode = "SYNTHETIC_SIMULATION"
     source_metadata: dict[str, Any] = Field(default_factory=dict)
     label: Literal["OPERATIONAL_FEED", "SYNTHETIC_FEED"] = "SYNTHETIC_FEED"
 
@@ -69,9 +107,11 @@ class ContradictionRecord(BaseModel):
     """Record of an operational contradiction detected during data ingestion."""
     id: str
     contradiction_type: ContradictionType
+    reason_code: ValidationReasonCode = "PHYSICAL_IMPOSSIBILITY"
     train_id: str | None
     feed_id: str
     description: str
+    rule_reference: str = "IR-G&SR-GENERIC"
     offending_payload: dict[str, Any]
     prior_state: dict[str, Any] | None = None
     detected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -81,8 +121,10 @@ class ContradictionRecord(BaseModel):
 class IngestionValidationResult(BaseModel):
     """Result of validating and normalizing an incoming feed event."""
     status: Literal["VALID", "DUPLICATE", "MISSING_SEQUENCE", "CONTRADICTION", "SCHEMA_ERROR"]
+    reason_code: ValidationReasonCode = "VALID_EVENT"
     event: NormalizedMovementEvent | None = None
     message: str
+    rule_reference: str = "IR-G&SR-VALID"
     contradiction: ContradictionRecord | None = None
     sequence_gap_detected: bool = False
     gap_size: int = 0
@@ -107,6 +149,7 @@ class FeedHealthMetrics(BaseModel):
     error_rate_pct: float = 0.0
     reconnection_attempts: int = 0
     circuit_breaker_open: bool = False
+    environment: EnvironmentMode = "SYNTHETIC_SIMULATION"
     mode: Literal["AUTHORIZED_EXTERNAL_FEED", "SYNTHETIC_MOCK_FEED"] = "SYNTHETIC_MOCK_FEED"
     stale_threshold_seconds: float = 30.0
     degraded_threshold_seconds: float = 15.0

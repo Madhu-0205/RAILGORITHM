@@ -327,16 +327,26 @@ def section_controller_kpis(db: Session, simulation: Simulation) -> dict:
     ]
     block_occupancy_pct = round(100.0 * len(occupied_blocks) / max(1, total_blocks), 1)
 
-    # Critical single-line bottlenecks (NDL-KRN, MLG-SRP)
-    bottlenecks = ["B1", "B2", "B4", "B5"]
+    # Critical single-line bottlenecks (derived from network topology)
+    bottlenecks = [
+        block["id"]
+        for section in state["network"]["sections"]
+        if section.get("mode") == "SINGLE"
+        for block in section.get("blocks", [])
+    ]
     occupied_bottlenecks = [b for b in occupied_blocks if b["block_id"] in bottlenecks]
 
     # 3. Junction congestion (Malgaon Junction MLG throat)
-    throat_capacity = 2  # Hard constraint HC-006 limit
+    station_mlg = next((s for s in state["network"]["stations"] if s["id"] == "MLG"), None)
+    throat_capacity = station_mlg.get("junction_throat_capacity", 2) if station_mlg else 2  # Hard constraint HC-006 limit
+    mlg_sections = [sec for sec in state["network"]["sections"] if "MLG" in {sec["from_station"], sec["to_station"]}]
+    mlg_adjacent_blocks = {blk["id"] for sec in mlg_sections for blk in sec.get("blocks", [])}
+    
     mlg_throat_trains = [
         t["id"] for t in active_trains
         if (t.get("station_id") == "MLG" and t.get("entry_min", now) <= now <= t.get("exit_min", now))
-        or t.get("block_id") in {"B2", "B3U", "B3D"}
+        or t.get("block_id") in mlg_adjacent_blocks
+        or t.get("current_location") in mlg_adjacent_blocks
     ]
     throat_load = min(100.0, round(100.0 * len(mlg_throat_trains) / throat_capacity, 1))
     queue_length = max(0, len(mlg_throat_trains) - throat_capacity)

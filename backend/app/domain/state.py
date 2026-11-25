@@ -558,18 +558,22 @@ def apply_action(state: dict, action: dict) -> dict:
 
 def projected_delay(train: dict, now: int) -> int:
     if train["status"] == "COMPLETED":
-        return int(train["delay_min"])
+        return int(train.get("delay_min", 0))
+    if "route_index" not in train or not train.get("schedule"):
+        return int(train.get("delay_min", 0))
     if train["status"] == "RUNNING" and train.get("exit_min") is not None:
         next_index = int(train["route_index"]) + 1
-        scheduled = int(train["schedule"][next_index]["arrival_min"])
-        return max(0, int(train["exit_min"]) - scheduled)
+        if next_index < len(train["schedule"]):
+            scheduled = int(train["schedule"][next_index]["arrival_min"])
+            return max(0, int(train["exit_min"]) - scheduled)
+        return int(train.get("delay_min", 0))
     ready = int(train.get("ready_departure_min") or now)
     hold = int(train.get("hold_until_min") or 0)
     departure = max(now, ready, hold)
     next_index = int(train["route_index"]) + 1
     if next_index >= len(train["schedule"]):
-        return int(train["delay_min"])
-    run = int(train["schedule"][next_index]["run_from_previous_min"])
+        return int(train.get("delay_min", 0))
+    run = int(train["schedule"][next_index].get("run_from_previous_min", 0))
     scheduled = int(train["schedule"][next_index]["arrival_min"])
     return max(0, departure + run - scheduled)
 
@@ -610,7 +614,7 @@ def state_metrics(state: dict) -> dict:
             / platform_total,
             2,
         ),
-        "waiting_min_total": state["counters"]["waiting_min"],
+        "waiting_min_total": state.get("counters", {}).get("waiting_min", 0),
         "label": "SYNTHETIC",
     }
 

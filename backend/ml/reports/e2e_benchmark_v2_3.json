@@ -1,0 +1,259 @@
+{
+  "report_title": "RAILGORITHM 2.3 End-to-End Performance & Reliability Benchmark",
+  "generated_at": "2026-11-25T07:58:19.788080+00:00",
+  "hardware_environment": {
+    "system": "Darwin",
+    "release": "27.2.0",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.14.7",
+    "logical_cores": 6,
+    "chipset": "Apple A18 Pro (6 cores, arm64)",
+    "memory_gb": 8.0
+  },
+  "results": {
+    "in_memory_validation": {
+      "benchmark_name": "In-Memory Railway Validation Microbenchmark",
+      "scope": "In-memory pure Python function execution (RailwayIngestionValidator)",
+      "event_count": 5000,
+      "total_wall_time_s": 0.0697,
+      "throughput_events_per_sec": 71707.0,
+      "latency_microseconds": {
+        "count": 5000,
+        "mean": 11.0098,
+        "p50": 10.084,
+        "p95": 17.8771,
+        "p99": 34.2964,
+        "min": 5.334,
+        "max": 148.417,
+        "std_dev": 6.9207,
+        "unit": "microseconds"
+      },
+      "validation_rule_coverage": [
+        "Train-specific speed caps (Freight 75, Passenger 100, Express 130 km/h)",
+        "Section-specific speed caps (SR-01 100 km/h, SR-02 110 km/h)",
+        "Directional movement locks (B2U UP, B2D DOWN under IR-G&SR-3.38)",
+        "Minimum headway enforcement (HC-002, 180s)",
+        "Junction throat capacity enforcement (HC-006, MLG capacity 2)",
+        "EnvironmentMode isolation verification"
+      ]
+    },
+    "api_ingestion": {
+      "benchmark_name": "FastAPI Ingestion Endpoint Throughput & Latency",
+      "scope": "HTTP REST endpoints via TestClient (JSON serialization, validation, feed_manager)",
+      "single_event": {
+        "count": 500,
+        "wall_time_s": 2.0171,
+        "throughput_events_per_sec": 247.9,
+        "latency_ms": {
+          "count": 500,
+          "mean": 4.0306,
+          "p50": 2.623,
+          "p95": 4.9348,
+          "p99": 32.963,
+          "min": 2.1782,
+          "max": 170.2348,
+          "std_dev": 10.343,
+          "unit": "ms"
+        }
+      },
+      "batch_event": {
+        "batches": 20,
+        "batch_size": 50,
+        "total_events": 1000,
+        "wall_time_s": 0.0766,
+        "throughput_events_per_sec": 13058.7,
+        "batch_request_latency_ms": {
+          "count": 20,
+          "mean": 3.7651,
+          "p50": 3.6275,
+          "p95": 4.5357,
+          "p99": 4.8638,
+          "min": 3.1937,
+          "max": 4.9458,
+          "std_dev": 0.4467,
+          "unit": "ms"
+        },
+        "effective_per_event_latency_ms": 0.0753
+      }
+    },
+    "end_to_end_event_processing": {
+      "benchmark_name": "Full End-to-End Pipeline Processing",
+      "scope": "Raw Ingestion -> Railway Validator -> Normalization -> State Mutation -> Conflict Detection -> LRU Dedup",
+      "event_count": 1000,
+      "total_wall_time_s": 0.135,
+      "throughput_events_per_sec": 7404.7,
+      "latency_ms": {
+        "count": 1000,
+        "mean": 0.1312,
+        "p50": 0.1949,
+        "p95": 0.333,
+        "p99": 0.484,
+        "min": 0.0142,
+        "max": 1.5411,
+        "std_dev": 0.1308,
+        "unit": "ms"
+      },
+      "final_state_version": 501,
+      "idempotency_cache_size": 1000
+    },
+    "database_persistence": {
+      "benchmark_name": "Database Persistence Latency (SQLite Audit Log Commit)",
+      "scope": "Session.add() + Session.commit() with WAL mode disk flush",
+      "transaction_count": 100,
+      "total_wall_time_s": 0.0336,
+      "throughput_transactions_per_sec": 2978.8,
+      "latency_ms": {
+        "count": 100,
+        "mean": 0.3212,
+        "p50": 0.2149,
+        "p95": 0.7732,
+        "p99": 1.5779,
+        "min": 0.176,
+        "max": 2.9781,
+        "std_dev": 0.3453,
+        "unit": "ms"
+      }
+    },
+    "event_buffer_and_recovery": {
+      "benchmark_name": "Event Buffer & Stream Recovery Latency",
+      "scope": "Ring buffer index lookup and slice retrieval of acknowledged events",
+      "buffer_size": 500,
+      "queries_benchmarked": 100,
+      "latency_microseconds": {
+        "count": 100,
+        "mean": 28.7633,
+        "p50": 29.1245,
+        "p95": 33.3916,
+        "p99": 35.113,
+        "min": 22.833,
+        "max": 38.084,
+        "std_dev": 3.2487,
+        "unit": "microseconds"
+      }
+    },
+    "dashboard_analytics": {
+      "benchmark_name": "Role-Specific Dashboard Analytics Latency",
+      "scope": "Real-time KPI computation across dynamic network topology and train schedules",
+      "scenario": "evening_peak (12 trains, dual station, single line bottlenecks)",
+      "iterations": 100,
+      "station_master_dashboard_ms": {
+        "count": 100,
+        "mean": 0.8734,
+        "p50": 0.7912,
+        "p95": 1.3048,
+        "p99": 1.7692,
+        "min": 0.6465,
+        "max": 1.774,
+        "std_dev": 0.2514,
+        "unit": "ms"
+      },
+      "section_controller_dashboard_ms": {
+        "count": 100,
+        "mean": 1.725,
+        "p50": 1.248,
+        "p95": 4.5768,
+        "p99": 9.4141,
+        "min": 0.6355,
+        "max": 10.6856,
+        "std_dev": 1.6204,
+        "unit": "ms"
+      }
+    },
+    "scheduling_cpsat": {
+      "benchmark_name": "Google OR-Tools CP-SAT Scheduling Latency",
+      "scope": "Multi-train MIP formulation solving block exclusivity, headway, platform berth, and precedence",
+      "scenario": "evening_peak (horizon 60 min, 12 trains)",
+      "iterations_per_profile": 3,
+      "profiles": {
+        "balanced": {
+          "status": "OPTIMAL",
+          "is_optimal": true,
+          "mean_objective_value": 87300.0,
+          "solve_time_ms": {
+            "count": 3,
+            "mean": 261.9155,
+            "p50": 207.2937,
+            "p95": 355.8578,
+            "p99": 369.0635,
+            "min": 206.0879,
+            "max": 372.3649,
+            "std_dev": 95.6539,
+            "unit": "ms"
+          }
+        },
+        "delay_focused": {
+          "status": "OPTIMAL",
+          "is_optimal": true,
+          "mean_objective_value": 140020.0,
+          "solve_time_ms": {
+            "count": 3,
+            "mean": 377.1626,
+            "p50": 366.1388,
+            "p95": 397.3037,
+            "p99": 400.0739,
+            "min": 364.5825,
+            "max": 400.7664,
+            "std_dev": 20.4563,
+            "unit": "ms"
+          }
+        },
+        "priority_focused": {
+          "status": "OPTIMAL",
+          "is_optimal": true,
+          "mean_objective_value": 87168.0,
+          "solve_time_ms": {
+            "count": 3,
+            "mean": 262.6929,
+            "p50": 263.1454,
+            "p95": 266.036,
+            "p99": 266.293,
+            "min": 258.5762,
+            "max": 266.3572,
+            "std_dev": 3.9102,
+            "unit": "ms"
+          }
+        },
+        "throughput_focused": {
+          "status": "OPTIMAL",
+          "is_optimal": true,
+          "mean_objective_value": 69156.0,
+          "solve_time_ms": {
+            "count": 3,
+            "mean": 195.5548,
+            "p50": 195.2408,
+            "p95": 196.9041,
+            "p99": 197.052,
+            "min": 194.3347,
+            "max": 197.089,
+            "std_dev": 1.4037,
+            "unit": "ms"
+          }
+        }
+      }
+    },
+    "concurrent_users": {
+      "benchmark_name": "Concurrent Multi-Role API Stress Test",
+      "scope": "20 concurrent workers executing interleaved Section Controller, Station Master, and Ingestion queries",
+      "concurrency_level": 20,
+      "total_operations": 100,
+      "successful_operations": 100,
+      "failed_operations": 0,
+      "error_rate_pct": 0.0,
+      "total_wall_time_s": 0.4334,
+      "throughput_qps": 230.7,
+      "latency_ms": {
+        "count": 100,
+        "mean": 82.7631,
+        "p50": 82.9731,
+        "p95": 107.1796,
+        "p99": 109.0857,
+        "min": 48.4941,
+        "max": 109.1876,
+        "std_dev": 13.9874,
+        "unit": "ms"
+      }
+    }
+  },
+  "scientific_distinction_note": "In-memory validation throughput measures microsecond-level CPU bound validation of railway invariants without network or disk I/O. API ingestion throughput includes JSON HTTP serialization and FastAPI routing. End-to-end event processing measures full telemetry lifecycle including validation, normalization, idempotent state mutation, and conflict re-detection. Database persistence measures synchronous disk writes to SQLite with WAL journaling."
+}

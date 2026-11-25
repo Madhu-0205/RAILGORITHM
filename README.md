@@ -1,25 +1,34 @@
-# RAILGORITHM 2.2 — Real-Time Reliability & Operational Intelligence
+# RAILGORITHM 2.3 — Real-Time Integration & Reliability Audit
 
 AI-assisted railway traffic monitoring, scheduling, and **human decision support** on a realistic, modular network. The system ingests and validates real-time operational telemetry, simulates train movements, detects projected conflicts, generates candidate control actions, checks feasibility with Google OR-Tools CP-SAT, independently validates every candidate against formal hard constraints, ranks them with a trained PPO policy, explains the evidence, and **waits for an authorised human controller or station master to decide**.
 
-> **Advisory-Only Safety Guarantee:** RAILGORITHM is strictly an advisory decision-support system. It is never connected to live signalling interlockings, points, routes, or wayside infrastructure, and cannot execute autonomous control. Every operational recommendation requires explicit human confirmation (`confirm_apply: true`) and written rationale, cryptographically secured in an append-only audit chain.
+> **Advisory-Only Safety Guarantee:** RAILGORITHM is strictly an advisory decision-support system. It is never connected to live signalling interlockings, points, routes, or wayside infrastructure, and cannot execute autonomous control. Every operational recommendation requires explicit human confirmation (`confirm_apply: true`) and written rationale, cryptographically secured in an append-only SHA-256 audit chain.
 
 ---
 
-## What's New in Version 2.2
+## What's New in Version 2.3
 
-- **Modular Real-Time Data Ingestion:** Real-time ingestion engine (`backend/app/ingestion/`) supporting authorized railway telemetry feeds and partner APIs with continuous ingestion, data validation, and timestamp normalization.
-- **Strict Ingestion Validation & Contradiction Protection:** 6-layer verification covering duplicate fingerprint caching (LRU), sequence gap tracking, physical velocity limits ($v \le 160$ km/h), temporal drift/inversion checks, spatial teleportation prevention, and single-line mutual exclusion.
-- **Feed Health & Circuit Breakers:** Continuous health monitoring with freshness age classification (`HEALTHY`, `DEGRADED`, `STALE`, `OFFLINE`), automatic circuit breaker tripping on $>35\%$ error rates or 10 failures, exponential backoff reconnection, and clear stale-data UI indicators.
-- **Role-Specific Operational Dashboards:**
-  - **Station Master:** Station-scoped monitoring (NDL, KRN, MLG, SRP, VSN), platform berth visualizer (`OCCUPIED`, `AVAILABLE`, `OUTAGE`), rolling 60-minute train movements, schedule adherence %, and local station alerts.
-  - **Section Controller:** Corridor-wide movements, average section delay, block occupancy, Malgaon (MLG) junction throat load % and queue length, Delay Propagation Index ($DPI$), knock-on risk levels, throughput, and dispatch decision queue.
-- **Traceable Mathematical KPI Definitions:** Clear formulas, time periods, and source data citations displayed directly in the user interface for every operational metric.
-- **Empirically Measured High Performance:**
-  - Ingestion throughput: **72,446 events/second** (mean latency: **0.0055 ms**).
-  - Concurrent API load: **197.8 QPS** across 20 workers with **0.0% error rate** (mean latency: **96.7 ms**).
-  - Decision generation pipeline: **310.7 ms** mean latency under peak morning corridor traffic.
-- **252 Automated Tests:** 217 backend pytest tests and 35 frontend vitest tests passing with 100% success rate, clean TypeScript compilation, and clean production build.
+- **Configurable Railway Domain Validation:** Replaced universal hardcoded assumptions with dynamic, configurable infrastructure and rolling stock rules:
+  - **Train MPS Tiers:** Heavy Freight (75 km/h), MEMU/Suburban (90 km/h), Passenger (100 km/h), and Express/Superfast (130 km/h).
+  - **Section Limits & TSRs:** Dynamic sectional speed enforcement and Temporary Speed Restrictions (TSRs).
+  - **Directional Track Locking:** Strict unidirectional track circuit enforcement on double-line blocks (`B2U` strictly UP, `B2D` strictly DOWN) under `IR-G&SR-3.38`.
+  - **Block Continuity & Headway:** Unmatched block exit prevention (`UNMATCHED_BLOCK_EXIT`) and 180s minimum headway verification (`HC-002`).
+  - **Junction Diamond Throat Capacity:** Enforces maximum physical throat capacity ($C \le 2$) at Malgaon Junction (`HC-006`).
+- **21 Standardized Traceable Reason Codes:** Every rejected telemetry event carries an explicit, machine-readable `ValidationReasonCode` and regulatory rule reference (e.g. `IR-G&SR-4.08`, `IR-G&SR-3.38`, `HC-002`).
+- **Three-Tier Environment Isolation:** Complete separation across API, database, cache, and telemetry layers between `LIVE_OPERATIONAL`, `SYNTHETIC_SIMULATION`, and `HISTORICAL_PLAYBACK`. Cross-environment state mutations are strictly blocked.
+- **Idempotent State Processor & Deterministic Replay:** `OperationalEventProcessor` guarantees zero duplicate mutations via a 10,000-entry LRU cache and provides `replay_event_stream` to reconstruct operational states from scratch with 100% bit-for-bit parity.
+- **Audited KPI Mathematics:** Every Station Master and Section Controller KPI audited, documented with explicit formulas, reporting windows, and validated against independent ground-truth test matrices.
+- **Live Integration Readiness:** Architecture specifications and modular adapters (`backend/app/ingestion/adapters.py`) ready for CRIS/COA, FOIS, and IoT Axle Counters (BPAC) with strict read-only contracts.
+- **Comprehensive 8-Dimension Performance Benchmark:**
+  - In-memory validation throughput: **71,707.0 events/second** (mean: **11.01 microseconds**).
+  - Batch API ingestion throughput: **13,058.7 events/second** (effective: **0.0753 ms/event**).
+  - End-to-end pipeline throughput: **7,404.7 events/second** (mean: **0.1312 ms**).
+  - Database commit throughput: **2,978.8 tx/second** (mean: **0.3212 ms**).
+  - Stream recovery latency: **28.76 microseconds** mean.
+  - Role-specific dashboard latency: Station Master **0.87 ms**, Section Controller **1.73 ms**.
+  - CP-SAT scheduling solve time: **~260 ms** mean across all 4 objective profiles (all OPTIMAL).
+  - High-concurrency stress test: **230.7 QPS** across 20 workers with **0.0% error rate**.
+- **264 Automated Tests Passing:** 229 backend pytest tests and 35 frontend vitest tests passing with 100% pass rate, clean TypeScript compilation, and production build.
 
 ---
 
@@ -28,7 +37,8 @@ AI-assisted railway traffic monitoring, scheduling, and **human decision support
 1. **The human decides.** No recommendation is applied automatically. Approval requires explicit confirmation (`confirm_apply: true`) plus a written rationale (minimum 5 characters).
 2. **Validation is independent of AI.** CP-SAT and PPO cannot make an invalid action executable. A separate hard-constraint validator checks topology, exclusivity, headway, closures, platform availability, hold policies, and junction throat capacities.
 3. **The system admits uncertainty.** Infeasibility, model disagreement, stale advice, feed degradation, and candidate limitations are surfaced explicitly. Confidence percentages are never fabricated.
-4. **Data integrity first.** Live telemetry is validated before entering the dispatch pipeline. Contradictory, impossible, or duplicate sensor packets are quarantined without corrupting simulation state.
+4. **Data integrity first.** Live telemetry is validated against formal railway kinematic and interlocking invariants. Contradictory, impossible, or duplicate sensor packets are quarantined with traceable reason codes without corrupting state.
+5. **Strict Environment Separation.** Simulation events never contaminate live operational state. Live feeds are strictly isolated and marked as advisory-only.
 
 ---
 
@@ -37,16 +47,19 @@ AI-assisted railway traffic monitoring, scheduling, and **human decision support
 | Role | Scope | Key Capabilities |
 | :--- | :--- | :--- |
 | **Station Master** | Local Station (NDL / KRN / MLG / SRP / VSN) | Platform berthing lineup, dwell monitoring, local schedule adherence %, approaching trains (60m window), station-level recommendations. |
-| **Section Controller** | Full Corridor (120 km mainline) | Corridow-wide train tracking, block occupancy, Malgaon junction throat load %, Delay Propagation Index ($DPI$), dispatch queue, conflict resolution. |
+| **Section Controller** | Full Corridor (120 km mainline) | Corridor-wide train tracking, block occupancy, Malgaon junction throat load %, Delay Propagation Index ($DPI$), dispatch queue, conflict resolution. |
 
 ---
 
-## Verification & Documentation
+## Version 2.3 Documentation & Audit Deliverables
 
-Full architectural specifications, benchmark test logs, and mathematical derivations are available in `docs/`:
+Full architectural audits, mathematical derivations, benchmark reports, and regulatory specifications are available in `docs/`:
 
-- [Data Ingestion Architecture](file:///Users/madhu/RAILGORITHM/docs/INGESTION_ARCHITECTURE.md)
-- [Role-Based Operations & KPI Intelligence](file:///Users/madhu/RAILGORITHM/docs/ROLE_BASED_OPERATIONS.md)
-- [Performance, Concurrency & Load Benchmark Report](file:///Users/madhu/RAILGORITHM/docs/PERFORMANCE_AND_LOAD_TESTS.md)
-- [Verification and Operational Intelligence Report](file:///Users/madhu/RAILGORITHM/VERIFICATION.md)
-- [Raw Load Test Benchmark Report](file:///Users/madhu/RAILGORITHM/backend/ml/reports/load_test_v2_2.json)
+- [Real-Time Pipeline Audit Report](file:///Users/madhu/RAILGORITHM/docs/REALTIME_PIPELINE_AUDIT.md)
+- [Railway Data Validation Specification](file:///Users/madhu/RAILGORITHM/docs/RAILWAY_DATA_VALIDATION_SPEC.md)
+- [Operational KPI Accuracy Report](file:///Users/madhu/RAILGORITHM/docs/KPI_ACCURACY_REPORT.md)
+- [End-to-End Performance Benchmark Report](file:///Users/madhu/RAILGORITHM/docs/END_TO_END_PERFORMANCE_REPORT.md)
+- [Reliability & Failure Recovery Report](file:///Users/madhu/RAILGORITHM/docs/RELIABILITY_AND_RECOVERY_REPORT.md)
+- [Live Integration Readiness Specification](file:///Users/madhu/RAILGORITHM/docs/LIVE_INTEGRATION_READINESS.md)
+- [Verification & Operational Intelligence Report](file:///Users/madhu/RAILGORITHM/VERIFICATION.md)
+- [Raw End-to-End Benchmark Artifact](file:///Users/madhu/RAILGORITHM/backend/ml/reports/e2e_benchmark_v2_3.json)
