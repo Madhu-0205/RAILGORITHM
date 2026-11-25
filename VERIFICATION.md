@@ -1,8 +1,8 @@
-# RAILGORITHM 2.5 — Durable Operations & Causal Integrity Verification Report
+# RAILGORITHM 2.6 — Railway Operational Visualization & Interface Excellence Verification Report
 
 **Date:** 25 November 2026  
-**Version:** 2.5.0  
-**Scope:** Transactional Durability Boundaries (Fail-Fast in `LIVE_OPERATIONAL`, Atomic Working Copy State Rollback), Payload Tampering Detection (`PayloadTamperingError`), Sequence Collision Protection (`SequenceCollisionError`), Multi-Feed Causal Topological Replay (DAG Ordering, 6 Decoupled Dimensions, `REPLAY_UNCERTAIN` Anomaly Auditing), P0 Regulatory Correction (General Rules 1976: GR 3.38 Points Locking vs. GR 1.02(62) and GR 8.01/8.03(1) Directional Line Clear), KPI Authority & Null Semantics (Configurable Punctuality Threshold, Formal Nulls for Empty Observation Windows), Standardized Six Operational Statuses, and 16-Dimensional End-to-End Performance Benchmark.  
+**Version:** 2.6.0  
+**Scope:** Signature Railway Operational Visualizations: Section Controller Master Time-Distance Train Graph (`TimeDistanceGraph.tsx`), Station Master Working & Interlocking Yard Diagram (`StationWorkingDiagram.tsx`), Corridor Block Section Occupancy Matrix (`BlockOccupancyMatrix.tsx`), Station Operational Train Board (`StationTrainBoard.tsx`), Formal KPI Registry (`kpiRegistry.ts` / `docs/KPI_REGISTRY_V2_6.md`), WCAG 2.1 AA Accessibility, and Complete End-to-End Test Suite Verification.  
 **Classification:** Synthetic Simulation & Operational Decision-Support Testbed. Strictly read-only live telemetry ingestion. Zero autonomous control.  
 **Human Authority:** Every operational recommendation requires explicit human verification, authorization, and confirmation by a Station Master or Section Controller before physical adoption. Cryptographically sealed in an append-only SHA-256 hash chain.
 
@@ -10,30 +10,24 @@
 
 ## 1. Executive Summary & Verification Verdict
 
-RAILGORITHM 2.5 establishes complete transactional durability boundaries, atomic state rollback guarantees, and causal event integrity for railway decision-support operations.
+RAILGORITHM 2.6 delivers operational interface excellence, providing Station Masters and Section Controllers with familiar, domain-authentic digital control room visualizations:
 
-Prior to v2.5, persistence exceptions could silently fall back to degraded in-memory execution while returning an affirmative acknowledgement (`success: True`), falsely indicating durable commit. Furthermore, multi-feed replay sorting naively conflated wall-clock timestamps with causal precedence, and GR 3.38 was loosely cited for directional movement locking.
-
-RAILGORITHM v2.5 solves these challenges:
-1. **Durability Failure Semantics:** In `LIVE_OPERATIONAL` mode, database commit failures strictly raise `DurabilityUnavailableError` (mapped to HTTP 503 retryable) without modifying in-memory state.
-2. **Atomic State Mutation:** State updates are evaluated on candidate snapshot copies and swapped into authoritative memory only upon confirmed SQLite WAL transaction commit.
-3. **Payload Tampering & Sequence Collision Guards:** Enforces canonical SHA-256 payload hashing and uniqueness checks.
-4. **Causal DAG Replay:** Implements topological sorting across independent feeds with explicit `causal_dependencies`. Anomaly detection flags unresolved dependencies or timestamp inversions as `replay_status: "REPLAY_UNCERTAIN"`, which are prohibited from becoming authoritative live states.
-5. **Regulatory Traceability (GR 3.38 Correction):** Audited against General Rules 1976; corrected GR 3.38 to point locking for signal clearance, and mapped directional line clear to GR 1.02(62) ("Wrong Line" on double line) and GR 8.01/8.03(1) (Absolute Block System Line Clear condition).
-6. **KPI Authority & Formal Nulls:** Configurable punctuality threshold (`punctuality_threshold_min`, default 5 min) based on Railway Board Operating Directorate circulars; formal `null` (`NO_DATA`) semantics for empty observation windows.
+1. **Master Time-Distance Train Graph:** Full vector SVG string chart tracking train movements against physical corridor chainages ($0.0\text{ km}$ Nandpur to $60.0\text{ km}$ Vasanthpur), single-line bottleneck highlighting (Sections S1 and S3), directional slopes (UP vs DOWN), and interactive inspection.
+2. **Station Working & Interlocking Diagram:** Electronic Interlocking (EI) VDU layout rendering reception lines, platforms, main running lines, loop lines, diamond crossing throat, and signals with real-time sensor inspection.
+3. **Block Section Occupancy Matrix:** Comprehensive Absolute Block status monitoring across all corridor block sections (`B1`, `B2U`, `B2D`, `B3`, `B4U`, `B4D`), tracking line clear states, speed limits, and transit windows.
+4. **Station Operational Train Board:** Electronic passenger and operational board with live multi-attribute filtering and status classification.
+5. **Formal KPI Registry:** Exhaustive documentation of all mathematical formulas, physical units, reporting horizons, and epistemic certainty classifications.
 
 ### Verification Verdict: FULLY PASSED & EVIDENCE VALIDATED
-- **Backend Test Suite:** **244 passed** (`pytest` 9.2.0; 100% pass rate in $5.46\text{ s}$).
-- **Frontend Test Suite:** **42 passed** across 9 test suites (`vitest` 4.1.12; 100% pass rate in $4.48\text{ s}$).
-- **Total Automated Tests:** **286 tests passed** (100% pass rate).
+- **Backend Test Suite:** **244 passed** (`pytest` 9.2.0; 100% pass rate in $8.89\text{ s}$).
+- **Frontend Test Suite:** **57 passed** across 13 test suites (`vitest` 4.1.12; 100% pass rate in $6.19\text{ s}$).
+- **Total Automated Tests:** **301 tests passed** (100% pass rate).
 - **TypeScript Typecheck:** Clean (`tsc --noEmit` exits 0 with 0 errors).
-- **Production Build:** Clean production build (`vite build` completed cleanly; `dist/assets/index-JN3ORzto.js` [383.0 kB], `dist/assets/index-C7Czv-3t.css` [24.0 kB]).
-- **16-Dimensional Benchmark:** All 16 empirical operational dimensions executed and recorded in `backend/ml/reports/e2e_benchmark_v2_5.json`.
-- **Dashboard Modernization Verification:** Comprehensive UI, SVG schematic, and accessibility audit documented in `docs/FRONTEND_VERIFICATION.md`.
+- **Production Build:** Clean production build (`npm run build` completed cleanly; `dist/assets/index-ColWsMkQ.js` [427.9 kB], `dist/assets/index-C7Czv-3t.css` [24.0 kB]).
 
 ---
 
-## 2. 16-Dimensional Empirical Performance Benchmark Summary
+## 2. Historical Version 2.5 Verification Summary
 
 Full raw results recorded in `backend/ml/reports/e2e_benchmark_v2_5.json`:
 

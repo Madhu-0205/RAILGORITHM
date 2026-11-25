@@ -1,8 +1,34 @@
-# RAILGORITHM 2.5 — Durable Operations & Causal Integrity
+# RAILGORITHM 2.6 — Railway Operational Visualization & Interface Excellence
 
 AI-assisted railway traffic monitoring, scheduling, and **human decision support** on a realistic, modular network. The system ingests and validates real-time operational telemetry, simulates train movements, detects projected conflicts, generates candidate control actions, checks feasibility with Google OR-Tools CP-SAT, independently validates every candidate against formal hard constraints, ranks them with a trained PPO policy, explains the evidence, and **waits for an authorised human controller or station master to decide**.
 
 > **Advisory-Only Safety Guarantee:** RAILGORITHM is strictly an advisory decision-support system. It is never connected to live signalling interlockings, points, routes, or wayside infrastructure, and cannot execute autonomous control. Every operational recommendation requires explicit human confirmation (`confirm_apply: true`) and written rationale, cryptographically secured in an append-only SHA-256 audit chain.
+
+---
+
+## What's New in Version 2.6
+
+- **Section Controller Master Time-Distance Train Graph (`TimeDistanceGraph.tsx`):**
+  - High-performance vector SVG string chart mapping corridor train paths against physical station chainages ($0.0\text{ km}$ Nandpur to $60.0\text{ km}$ Vasanthpur).
+  - Multi-layer visual trajectories: scheduled timetable baseline (faint grey), actual historical movement (solid high-contrast), and projected schedule deviation (dashed).
+  - Indian Railways directional conventions: UP trains (sloping downward, Nandpur $\rightarrow$ Vasanthpur) vs DOWN trains (sloping upward, Vasanthpur $\rightarrow$ Nandpur).
+  - Single-line bottleneck territory shading (Sections S1 and S3) highlighting single-line crossing constraints where meets must occur at stations.
+  - Interactive time viewport filtering ($2\text{h}$, $3\text{h}$, $6\text{h}$), direction filtering, train hover inspection HUD, and accessible tabular fallback.
+- **Station Master Working & Interlocking Yard Diagram (`StationWorkingDiagram.tsx`):**
+  - Electronic Interlocking (EI) VDU layout rendering reception lines, passenger platforms (P1, P2, P3), main lines, loop lines, sidings, and fixed signals (Home, Starter, Advance Starter).
+  - Malgaon Junction (`MLG`) diamond scissors crossing throat visualization with capacity boundary of 2 simultaneous movements.
+  - Interactive track inspection panel displaying track circuit / axle counter sensor telemetry, berthed train details, and data provenance.
+- **Corridor Block Section Occupancy Matrix (`BlockOccupancyMatrix.tsx`):**
+  - Real-time monitoring grid tracking Absolute Block System status, line clear state (`LINE CLEAR`, `TRAIN ON LINE`, `LINE CLOSED`), speed limits, and transit windows across all corridor block sections (`B1`, `B2U`, `B2D`, `B3`, `B4U`, `B4D`).
+- **Station Operational Train Board (`StationTrainBoard.tsx`):**
+  - Railway station electronic arrival and departure board with multi-attribute filtering (Approaching, Berthed, Departed, Delayed) and live search.
+- **Formal KPI Registry (`kpiRegistry.ts` / `docs/KPI_REGISTRY_V2_6.md`):**
+  - Comprehensive metadata registry defining mathematical formulas, physical units, data provenance, reporting windows, and epistemic classifications (`MEASURED`, `CALCULATED`, `PREDICTED`, `HEURISTIC`, `NO_DATA`, `STALE`).
+- **301 Automated Tests Passing (100% Pass Rate):**
+  - **244 backend tests passed** (`pytest`).
+  - **57 frontend tests passed** across 13 test suites (`vitest`).
+  - Clean TypeScript compilation (`tsc --noEmit`).
+  - Successful production build (`npm run build`).
 
 ---
 

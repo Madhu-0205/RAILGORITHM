@@ -30,6 +30,11 @@ import { RailwayCorridorDiagram } from "../components/RailwayCorridorDiagram";
 import { StationPlatformBerths } from "../components/StationPlatformBerths";
 import { HourlyMovementsChart, type MovementBucket } from "../components/HourlyMovementsChart";
 import { DelayDistributionChart, type DelayTier } from "../components/DelayDistributionChart";
+import { TimeDistanceGraph } from "../components/TimeDistanceGraph";
+import { StationWorkingDiagram } from "../components/StationWorkingDiagram";
+import { BlockOccupancyMatrix } from "../components/BlockOccupancyMatrix";
+import { StationTrainBoard } from "../components/StationTrainBoard";
+import { KPI_REGISTRY } from "../lib/kpiRegistry";
 
 const DEFAULT_STATIONS: Station[] = [
   { id: "NDL", name: "Nandpur", code: "NDL", platforms: ["P1", "P2"], x: 0, is_junction: false },
@@ -224,6 +229,7 @@ export function DashboardPage() {
   const corridorBlocks = networkData?.block_occupancy || data.occupied_blocks || [];
   const corridorTrains = data.trains || [];
   const corridorConflicts = sectionKpiData?.active_conflicts || data.conflicts || [];
+  const currentStation = corridorStations.find((s) => s.id === stationId) || corridorStations[0];
 
   return (
     <div className="stack">
@@ -405,6 +411,36 @@ export function DashboardPage() {
               quality="CALCULATED"
             />
           </div>
+
+          {/* Station Working & Interlocking Diagram */}
+          <Panel
+            title="Station Working & Interlocking Yard Diagram"
+            subtitle={`Electronic Interlocking (EI) track layout, platforms, and turnouts for ${stationKpiData.station_name}`}
+          >
+            <StationWorkingDiagram
+              station={currentStation}
+              platforms={data.available_platforms || []}
+              outages={data.platform_outages || []}
+              trains={corridorTrains}
+            />
+          </Panel>
+
+          {/* Station Train Arrival & Departure Board */}
+          <Panel
+            title="Station Train Arrival & Departure Board"
+            subtitle={`Real-time passenger and operational train movements for ${stationKpiData.station_name}`}
+            actions={
+              <Link className="button button-small" to="/trains">
+                Full Corridor Trains
+              </Link>
+            }
+          >
+            <StationTrainBoard
+              stationId={stationId}
+              stationName={stationKpiData.station_name}
+              trains={corridorTrains}
+            />
+          </Panel>
 
           {/* Platform Berthing Status Visualizer */}
           <Panel
@@ -721,6 +757,21 @@ export function DashboardPage() {
             />
           </div>
 
+          {/* Section Controller Master Time-Distance Train Graph */}
+          <Panel
+            title="Section Controller Time-Distance Train Graph"
+            subtitle="Master string chart tracking corridor train trajectories, station dwell times, and single-line crossings"
+          >
+            <TimeDistanceGraph
+              stations={corridorStations}
+              sections={corridorSections}
+              trains={corridorTrains}
+              conflicts={corridorConflicts}
+              simTimeMin={data.simulation.sim_time_min}
+              simTimeString={data.simulation.sim_time}
+            />
+          </Panel>
+
           {/* Real-time Horizontal Railway Corridor Schematic */}
           <Panel
             title="Corridor Traffic & Movement Schematic"
@@ -737,6 +788,18 @@ export function DashboardPage() {
                 setStationId(st);
                 setViewMode("STATION");
               }}
+            />
+          </Panel>
+
+          {/* Corridor Block Section Occupancy Matrix */}
+          <Panel
+            title="Corridor Block Section Occupancy Matrix"
+            subtitle="Absolute Block System status, axle counter detection, and line clear verification across all corridor blocks"
+          >
+            <BlockOccupancyMatrix
+              sections={corridorSections}
+              blockOccupancy={corridorBlocks}
+              trains={corridorTrains}
             />
           </Panel>
 
@@ -975,12 +1038,30 @@ export function DashboardPage() {
             <dl className="grid-2">
               {Object.entries(
                 (viewMode === "STATION" ? stationKpiData?.kpi_definitions : sectionKpiData?.kpi_definitions) || {}
-              ).map(([key, def]) => (
-                <div key={key} style={{ padding: "0.5rem 0" }}>
-                  <dt style={{ fontWeight: 600 }}>{key.replace(/_/g, " ")}</dt>
-                  <dd className="muted small">{def}</dd>
-                </div>
-              ))}
+              ).map(([key, def]) => {
+                const regKey = key.toLowerCase().replace(/[\s\(\)-]+/g, "_").replace(/_+$/, "");
+                const regItem = Object.values(KPI_REGISTRY).find(
+                  (k) => k.name.toLowerCase() === key.toLowerCase() || regKey.includes(k.id)
+                );
+                return (
+                  <div key={key} style={{ padding: "0.5rem 0", borderBottom: "1px solid #F1F5F9" }}>
+                    <div className="flex-row items-center gap-2">
+                      <dt style={{ fontWeight: 600 }}>{key.replace(/_/g, " ")}</dt>
+                      {regItem && (
+                        <span className="badge badge-default" style={{ fontSize: "0.68rem" }}>
+                          {regItem.classification} · {regItem.unit}
+                        </span>
+                      )}
+                    </div>
+                    <dd className="muted small" style={{ margin: "4px 0 0" }}>{def}</dd>
+                    {regItem?.dataSource && (
+                      <span className="small text-muted d-block" style={{ fontSize: "0.75rem", marginTop: "2px" }}>
+                        Source: {regItem.dataSource} · Semantics: {regItem.missingDataSemantics}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </dl>
           </div>
         )}
