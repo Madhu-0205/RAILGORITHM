@@ -5,6 +5,13 @@ import { Shell } from "./components/Shell";
 import { Spinner } from "./components/ui";
 import { LoginPage } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
+import { MasterControlGraphPage } from "./pages/MasterControlGraphPage";
+import { StationControlPage } from "./pages/StationControlPage";
+import { BlockSectionBoardPage } from "./pages/BlockSectionBoardPage";
+import { CrossingsPage } from "./pages/CrossingsPage";
+import { RestrictionsPage } from "./pages/RestrictionsPage";
+import { IncidentsPage } from "./pages/IncidentsPage";
+import { HandoverPage } from "./pages/HandoverPage";
 import { TrainsPage } from "./pages/Trains";
 import { NetworkPage } from "./pages/Network";
 import { ConflictsPage } from "./pages/Conflicts";
@@ -66,11 +73,30 @@ export function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route
+          path="graph"
+          element={
+            <RequireRole roles={["SECTION_MASTER"]}>
+              <MasterControlGraphPage />
+            </RequireRole>
+          }
+        />
+        <Route path="stations" element={<StationControlPage />} />
+        <Route path="blocks" element={<BlockSectionBoardPage />} />
         <Route path="trains" element={<TrainsPage />} />
-        <Route path="network" element={<NetworkPage />} />
+        <Route path="crossings" element={<CrossingsPage />} />
         <Route path="conflicts" element={<ConflictsPage />} />
         <Route path="recommendations" element={<RecommendationsPage />} />
         <Route path="recommendations/:recommendationId" element={<RecommendationDetailPage />} />
+        <Route path="restrictions" element={<RestrictionsPage />} />
+        <Route
+          path="incidents"
+          element={
+            <RequireRole roles={["SECTION_MASTER"]}>
+              <IncidentsPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="disruptions"
           element={
@@ -79,8 +105,17 @@ export function App() {
             </RequireRole>
           }
         />
+        <Route path="network" element={<NetworkPage />} />
         <Route path="what-if" element={<WhatIfPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route
+          path="handover"
+          element={
+            <RequireRole roles={["SECTION_MASTER"]}>
+              <HandoverPage />
+            </RequireRole>
+          }
+        />
         <Route path="specifications" element={<SpecificationsPage />} />
         <Route
           path="audit"

@@ -13,19 +13,34 @@ interface NavItem {
   label: string;
   icon: string;
   roles: string[];
+  group?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: "◉", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/trains", label: "Train Movements", icon: "▤", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/network", label: "Railway Network", icon: "⌁", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/conflicts", label: "Conflict Detection", icon: "⚠", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/recommendations", label: "AI Recommendations", icon: "✦", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/disruptions", label: "Disruption Management", icon: "⛔", roles: ["SECTION_MASTER"] },
-  { to: "/what-if", label: "What-if Simulation", icon: "⧉", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/analytics", label: "Analytics", icon: "▥", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/specifications", label: "Assumptions & Constraints", icon: "⚙", roles: ["SECTION_MASTER", "STATION_MASTER"] },
-  { to: "/audit", label: "Audit Trail", icon: "⛓", roles: ["SECTION_MASTER"] },
+  // Core Control Office Workspaces
+  { to: "/", label: "Dashboard", icon: "◉", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Core Console" },
+  { to: "/graph", label: "Master Control Graph", icon: "📈", roles: ["SECTION_MASTER"], group: "Core Console" },
+  { to: "/stations", label: "Station Control", icon: "🏛", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Core Console" },
+  { to: "/blocks", label: "Block Section Board", icon: "⏹", roles: ["SECTION_MASTER"], group: "Core Console" },
+
+  // Traffic Regulation
+  { to: "/trains", label: "Train Movements", icon: "▤", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Traffic Regulation" },
+  { to: "/crossings", label: "Crossings & Precedence", icon: "⇄", roles: ["SECTION_MASTER"], group: "Traffic Regulation" },
+  { to: "/conflicts", label: "Conflict Detection", icon: "⚠", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Traffic Regulation" },
+  { to: "/recommendations", label: "AI Recommendations", icon: "✦", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Traffic Regulation" },
+
+  // Operations & Safety
+  { to: "/restrictions", label: "Engineering Restrictions", icon: "🚧", roles: ["SECTION_MASTER"], group: "Operations & Safety" },
+  { to: "/disruptions", label: "Disruption Management", icon: "⛔", roles: ["SECTION_MASTER"], group: "Operations & Safety" },
+  { to: "/incidents", label: "Incident Desk", icon: "🚨", roles: ["SECTION_MASTER"], group: "Operations & Safety" },
+  { to: "/network", label: "Railway Network", icon: "⌁", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Operations & Safety" },
+  { to: "/what-if", label: "What-if Simulation", icon: "⧉", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Operations & Safety" },
+  { to: "/analytics", label: "Analytics", icon: "▥", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Operations & Safety" },
+
+  // Governance & Continuity
+  { to: "/handover", label: "Shift Handover", icon: "📋", roles: ["SECTION_MASTER"], group: "Governance" },
+  { to: "/audit", label: "Audit Trail", icon: "⛓", roles: ["SECTION_MASTER"], group: "Governance" },
+  { to: "/specifications", label: "Assumptions & Constraints", icon: "⚙", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Governance" },
 ];
 
 export function Shell() {
@@ -78,19 +93,25 @@ export function Shell() {
           </div>
         </div>
         <nav className="nav">
-          {visibleItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-            >
-              <span className="nav-icon" aria-hidden>
-                {item.icon}
-              </span>
-              {item.label}
-            </NavLink>
-          ))}
+          {visibleItems.map((item, index) => {
+            const prevItem = visibleItems[index - 1];
+            const showGroup = item.group && (!prevItem || prevItem.group !== item.group);
+            return (
+              <div key={item.to} className="nav-item-wrap">
+                {showGroup && <div className="nav-group-header">{item.group}</div>}
+                <NavLink
+                  to={item.to}
+                  end={item.to === "/"}
+                  className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+                >
+                  <span className="nav-icon" aria-hidden>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </NavLink>
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-footer">
           <div className="user-chip">
