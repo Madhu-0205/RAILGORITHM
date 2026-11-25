@@ -132,6 +132,8 @@ def initialise_state(scenario_key: str, *, seed_override: int | None = None) -> 
         "scenario_key": scenario["scenario_key"],
         "scenario_name": scenario["scenario_name"],
         "description": scenario["description"],
+        "service_pattern": scenario.get("service_pattern", "MIXED"),
+        "tags": list(scenario.get("tags", [])),
         "label": "SYNTHETIC",
         "network": scenario["network"],
         "start_time_min": start,
@@ -143,6 +145,8 @@ def initialise_state(scenario_key: str, *, seed_override: int | None = None) -> 
         "trains": [],
         "closures": copy.deepcopy(scenario["closures"]),
         "platform_outages": copy.deepcopy(scenario["platform_outages"]),
+        "speed_restrictions": copy.deepcopy(scenario.get("speed_restrictions", [])),
+        "disruptions": copy.deepcopy(scenario.get("disruptions", [])),
         "block_occupancy": {},
         "platform_occupancy": {},
         "counters": {

@@ -46,8 +46,14 @@ def _json_default(value):  # noqa: ANN001
     return str(value)
 
 
-def scenario_benchmark(*, seeds: list[int], steps: int, scenario_keys: list[str]) -> dict:
-    ppo = PPOAgent()
+def scenario_benchmark(
+    *,
+    seeds: list[int],
+    steps: int,
+    scenario_keys: list[str],
+    artifact_dir: Path | None = None,
+) -> dict:
+    ppo = PPOAgent(artifact_dir=artifact_dir)
     rows: list[dict] = []
     started = time.perf_counter()
     for scenario in scenario_keys:
@@ -181,11 +187,16 @@ def cpsat_benchmark(*, seeds: list[int], scenario_keys: list[str]) -> dict:
     }
 
 
-def ppo_benchmark(*, seeds: list[int], scenario_keys: list[str] | None = None) -> dict:
+def ppo_benchmark(
+    *,
+    seeds: list[int],
+    scenario_keys: list[str] | None = None,
+    artifact_dir: Path | None = None,
+) -> dict:
     # Imported lazily so the scenario/CP-SAT benchmarks work without torch.
     from ml.train_ppo import evaluate
 
-    agent = PPOAgent()
+    agent = PPOAgent(artifact_dir=artifact_dir)
     if not agent.available or agent.model is None:
         return {
             "label": "SYNTHETIC_PPO_BENCHMARK",
@@ -209,6 +220,12 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     parser.add_argument("--scenarios", nargs="*", default=None)
     parser.add_argument("--output", type=Path, default=REPORTS_DIR)
+    parser.add_argument(
+        "--artifact-dir",
+        type=Path,
+        default=None,
+        help="PPO artifact directory to evaluate; defaults to the configured artifact dir.",
+    )
     parser.add_argument("--scenario", action="store_true")
     parser.add_argument("--cpsat", action="store_true")
     parser.add_argument("--ppo", action="store_true")
@@ -222,7 +239,10 @@ def main() -> int:
 
     if args.all or args.scenario:
         report = scenario_benchmark(
-            seeds=args.seeds, steps=args.steps, scenario_keys=scenario_keys
+            seeds=args.seeds,
+            steps=args.steps,
+            scenario_keys=scenario_keys,
+            artifact_dir=args.artifact_dir,
         )
         report.update({"generated_at": stamp, "label_name": args.label})
         path = args.output / f"{args.label}_scenario.json"
@@ -239,7 +259,11 @@ def main() -> int:
         print(f"cpsat: {report['solves']} solves -> {path}")
 
     if args.all or args.ppo:
-        report = ppo_benchmark(seeds=args.seeds, scenario_keys=scenario_keys)
+        report = ppo_benchmark(
+            seeds=args.seeds,
+            scenario_keys=scenario_keys,
+            artifact_dir=args.artifact_dir,
+        )
         report.update({"generated_at": stamp, "label_name": args.label})
         path = args.output / f"{args.label}_ppo.json"
         path.write_text(json.dumps(report, indent=2, default=_json_default))

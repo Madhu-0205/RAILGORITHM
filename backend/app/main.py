@@ -21,6 +21,7 @@ from .routers import (
     recommendations,
     scenarios,
     simulations,
+    system,
 )
 from .services.seed import seed_default_simulation, seed_users, sync_model_registry
 from .services.simulation_service import ServiceError
@@ -34,6 +35,8 @@ logger = logging.getLogger("railgorithm")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.is_production:
+        settings.assert_safe_for_production()
     init_db()
     db = SessionLocal()
     try:
@@ -69,6 +72,17 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.exception_handler(ServiceError)
 async def service_error_handler(request: Request, exc: ServiceError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
@@ -81,6 +95,7 @@ for router in (
     recommendations.router,
     audit.router,
     models_router.router,
+    system.router,
 ):
     app.include_router(router, prefix=settings.api_prefix)
 
@@ -95,11 +110,15 @@ def health() -> dict:
         "human_in_control": True,
         "live_railway_connection": False,
         "data_label": "SYNTHETIC",
+        "environment": settings.environment,
         "ppo": {
             "trained": bool(summary.get("trained")),
             "status": summary.get("status", "UNTRAINED_DEVELOPMENT_COMPONENT"),
+            "model_version": summary.get("model_version", "ppo-unavailable"),
         },
         "cp_sat_time_limit_s": settings.cp_sat_time_limit_s,
+        "assumption_spec_version": "assumptions-2.0.0",
+        "constraint_spec_version": "constraints-2.0.0",
     }
 
 

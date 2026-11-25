@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/disruptions", label: "Disruption Management", icon: "⛔", roles: ["SECTION_MASTER"] },
   { to: "/what-if", label: "What-if Simulation", icon: "⧉", roles: ["SECTION_MASTER", "STATION_MASTER"] },
   { to: "/analytics", label: "Analytics", icon: "▥", roles: ["SECTION_MASTER", "STATION_MASTER"] },
+  { to: "/specifications", label: "Assumptions & Constraints", icon: "⚙", roles: ["SECTION_MASTER", "STATION_MASTER"] },
   { to: "/audit", label: "Audit Trail", icon: "⛓", roles: ["SECTION_MASTER"] },
 ];
 

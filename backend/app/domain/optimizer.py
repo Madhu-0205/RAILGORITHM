@@ -22,9 +22,10 @@ from ortools.sat.python import cp_model
 
 from ..config import settings
 from .network import Network
+from .spec import configured_objective_profile, objective_weights
 from .state import format_minutes
 
-OPTIMIZER_VERSION = "cpsat-1.0.0"
+OPTIMIZER_VERSION = "cpsat-2.0.0"
 
 SOLVER_STATUS = {
     cp_model.OPTIMAL: "OPTIMAL",
@@ -107,13 +108,21 @@ def _solver_status_name(status: int) -> str:
     return SOLVER_STATUS.get(status, f"UNKNOWN_{status}")
 
 
-def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
+def optimise(
+    state: dict,
+    *,
+    horizon_min: int | None = None,
+    profile: str | None = None,
+    weights: dict[str, int] | None = None,
+) -> dict:
     started = time.perf_counter()
     network = Network.from_dict(state["network"])
     now = int(state["sim_time_min"])
     horizon_min = horizon_min or settings.recommendation_horizon_min
     max_time = now + max(horizon_min + 180, 240)
     seed = int(state.get("seed", 0)) % (2**31 - 1)
+    profile = profile or configured_objective_profile()
+    weights = weights or objective_weights(profile)
 
     active_trains = [train for train in state["trains"] if train["status"] != "COMPLETED"]
     if not active_trains:
@@ -121,6 +130,10 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
             "status": "FEASIBLE",
             "optimizer_version": OPTIMIZER_VERSION,
             "objective_value": 0,
+            "objective_bound": 0,
+            "is_optimal": True,
+            "objective_profile": profile,
+            "objective_weights": weights,
             "solve_time_s": 0.0,
             "horizon_min": horizon_min,
             "trains": {},
@@ -223,26 +236,32 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
         model.Add(delay >= 0)
         final_delay_vars[train_id] = delay
         weight = max(1, 6 - int(train["priority"]))
-        objective_terms.append(delay * weight * 100)
+        objective_terms.append(delay * weight * int(weights["final_delay"]))
         for index, leg in enumerate(legs):
             if leg["fixed_entry"] is None:
                 scheduled_departure = leg["scheduled_departure"]
                 if scheduled_departure is not None:
                     departure_delay = model.NewIntVar(0, max_time, f"depdelay_{train_id}_{index}")
                     model.Add(departure_delay >= dep_vars[(train_id, index)] - int(scheduled_departure))
-                    objective_terms.append(departure_delay * 2)
+                    objective_terms.append(
+                        departure_delay * int(weights["departure_delay"])
+                    )
         # Discourage holding beyond the first legal release.
         if legs and legs[0]["fixed_entry"] is None:
             hold_penalty = model.NewIntVar(0, max_time, f"hold_{train_id}")
             model.Add(hold_penalty >= dep_vars[(train_id, 0)] - release)
             model.Add(hold_penalty >= 0)
-            objective_terms.append(hold_penalty * 3)
+            objective_terms.append(hold_penalty * int(weights["hold"]))
 
     if not legs_by_train:
         return {
             "status": "FEASIBLE",
             "optimizer_version": OPTIMIZER_VERSION,
             "objective_value": 0,
+            "objective_bound": 0,
+            "is_optimal": True,
+            "objective_profile": profile,
+            "objective_weights": weights,
             "solve_time_s": round(time.perf_counter() - started, 3),
             "horizon_min": horizon_min,
             "trains": {},
@@ -293,7 +312,11 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
                     )
                 )
         if throat_intervals:
-            model.AddCumulative(throat_intervals, [1] * len(throat_intervals), 2)
+            model.AddCumulative(
+                throat_intervals,
+                [1] * len(throat_intervals),
+                max(1, int(station.junction_throat_capacity)),
+            )
 
     model.Minimize(sum(objective_terms) if objective_terms else 0)
 
@@ -303,6 +326,10 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
             "status": "MODEL_INVALID",
             "optimizer_version": OPTIMIZER_VERSION,
             "objective_value": None,
+            "objective_bound": None,
+            "is_optimal": False,
+            "objective_profile": profile,
+            "objective_weights": weights,
             "solve_time_s": round(time.perf_counter() - started, 3),
             "horizon_min": horizon_min,
             "trains": {},
@@ -330,6 +357,10 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
             "status": status_name,
             "optimizer_version": OPTIMIZER_VERSION,
             "objective_value": None,
+            "objective_bound": None,
+            "is_optimal": False,
+            "objective_profile": profile,
+            "objective_weights": weights,
             "solve_time_s": solve_time,
             "horizon_min": horizon_min,
             "trains": {},
@@ -405,7 +436,14 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
     schedule = {
         "status": status_name,
         "optimizer_version": OPTIMIZER_VERSION,
-        "objective_value": float(solver.ObjectiveValue()) if status_name == "OPTIMAL" else float(solver.BestObjectiveBound()),
+        # ObjectiveValue() is the value of the returned solution for both
+        # OPTIMAL and FEASIBLE. BestObjectiveBound() is a bound, not the
+        # achieved objective, and must not be reported as the objective.
+        "objective_value": float(solver.ObjectiveValue()),
+        "objective_bound": float(solver.BestObjectiveBound()),
+        "is_optimal": status_name == "OPTIMAL",
+        "objective_profile": profile,
+        "objective_weights": weights,
         "solve_time_s": solve_time,
         "horizon_min": horizon_min,
         "trains": trains_payload,
@@ -466,3 +504,40 @@ def optimise(state: dict, *, horizon_min: int | None = None) -> dict:
         "schedule": schedule,
     }
     return {**schedule, "action": action}
+
+
+def optimise_alternatives(
+    state: dict,
+    *,
+    horizon_min: int | None = None,
+    profiles: tuple[str, ...] = (
+        "balanced",
+        "delay_focused",
+        "priority_focused",
+        "throughput_focused",
+    ),
+) -> list[dict]:
+    """Solve the same model under several documented objective profiles.
+
+    These are genuinely distinct feasible schedules where the solver finds
+    them. They are *not* claimed to be globally optimal for the dispatcher's
+    real objective, and every returned schedule still requires independent
+    validation. The pipeline uses this only for comparison/reporting, never to
+    silently replace the balanced recommendation.
+    """
+    results: list[dict] = []
+    for profile in profiles:
+        result = optimise(state, horizon_min=horizon_min, profile=profile)
+        results.append(
+            {
+                "profile": profile,
+                "status": result.get("status"),
+                "is_optimal": result.get("is_optimal", False),
+                "objective_value": result.get("objective_value"),
+                "objective_bound": result.get("objective_bound"),
+                "objective_weights": result.get("objective_weights"),
+                "solve_time_s": result.get("solve_time_s"),
+                "schedule": result,
+            }
+        )
+    return results

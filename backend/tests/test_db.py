@@ -15,6 +15,7 @@ def test_required_tables_exist():
         "recommendations",
         "decisions",
         "audit_events",
+        "audit_chain_head",
         "model_versions",
     }.issubset(tables)
 

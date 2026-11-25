@@ -209,4 +209,42 @@ export const api = {
   models() {
     return request<{ models: ModelRecord[]; disclaimer: string }>("/models");
   },
+  assumptions() {
+    return request<{
+      version: string;
+      label: string;
+      disclaimer: string;
+      assumptions: {
+        id: string;
+        category: string;
+        title: string;
+        value: unknown;
+        unit: string;
+        source: string;
+        configurable_via: string | null;
+        affects: string[];
+      }[];
+    }>("/system/assumptions");
+  },
+  constraints() {
+    return request<{
+      version: string;
+      label: string;
+      disclaimer: string;
+      counts: { hard: number; soft: number };
+      constraints: {
+        id: string;
+        name: string;
+        kind: "HARD" | "SOFT";
+        scope: string;
+        statement: string;
+        enforced_by: string[];
+        assumption_ids: string[];
+        failure_effect: string;
+      }[];
+    }>("/system/constraints");
+  },
+  systemVersions() {
+    return request<Record<string, unknown>>("/system/versions");
+  },
 };

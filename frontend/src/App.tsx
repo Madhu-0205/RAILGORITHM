@@ -14,6 +14,7 @@ import { DisruptionsPage } from "./pages/Disruptions";
 import { WhatIfPage } from "./pages/WhatIf";
 import { AnalyticsPage } from "./pages/Analytics";
 import { AuditPage } from "./pages/Audit";
+import { SpecificationsPage } from "./pages/Specifications";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, initialising } = useAuth();
@@ -80,6 +81,7 @@ export function App() {
         />
         <Route path="what-if" element={<WhatIfPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="specifications" element={<SpecificationsPage />} />
         <Route
           path="audit"
           element={

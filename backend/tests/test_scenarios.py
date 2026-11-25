@@ -16,6 +16,13 @@ EXPECTED_KEYS = {
     "platform_outage",
     "priority_train",
     "no_feasible_schedule",
+    # Version 2.0 additions
+    "double_line_overtaking",
+    "junction_congestion",
+    "maintenance_window",
+    "cascading_delay",
+    "disruption_recovery",
+    "time_varying_demand",
 }
 
 

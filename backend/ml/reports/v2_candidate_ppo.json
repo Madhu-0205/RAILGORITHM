@@ -1,0 +1,85 @@
+{
+  "label": "candidate",
+  "note": "Evaluation uses the current EVAL_SCENARIOS in backend/ml/train_ppo.py.",
+  "model_version": "ppo-candidate-ranker-2.0.0",
+  "decisions": 44,
+  "skipped": 4,
+  "scenarios": [
+    "cascading_delay",
+    "disruption_recovery",
+    "double_line_overtaking",
+    "junction_congestion",
+    "maintenance_window",
+    "time_varying_demand"
+  ],
+  "seeds": [
+    5000,
+    5001
+  ],
+  "policy_top1_matches_measured_best_pct": 65.91,
+  "mean_regret_vs_best": 16.227,
+  "median_regret_vs_best": 0.0,
+  "baseline_mean_regret_vs_best": 14.795,
+  "cpsat_mean_regret_vs_best": 16.395,
+  "mean_policy_score": 293.182,
+  "mean_baseline_score": 291.75,
+  "mean_cpsat_score": 214.316,
+  "mean_policy_total_delay_min": 121.66,
+  "mean_policy_residual_conflicts": 1.34,
+  "mean_reward": 0.1679,
+  "mean_eligible_candidates": 8.05,
+  "inference_time_ms_mean": 0.1302,
+  "inference_time_ms_p95": 0.0611,
+  "violation_attempts": 0,
+  "candidate_filter_rejections": 0,
+  "per_scenario": {
+    "cascading_delay": {
+      "decisions": 8,
+      "top1_pct": 50.0
+    },
+    "disruption_recovery": {
+      "decisions": 4,
+      "top1_pct": 100.0
+    },
+    "double_line_overtaking": {
+      "decisions": 8,
+      "top1_pct": 100.0
+    },
+    "junction_congestion": {
+      "decisions": 8,
+      "top1_pct": 25.0
+    },
+    "maintenance_window": {
+      "decisions": 8,
+      "top1_pct": 100.0
+    },
+    "time_varying_demand": {
+      "decisions": 8,
+      "top1_pct": 37.5
+    }
+  },
+  "measurement_note": "All evaluation values are measured on synthetic cloned simulations. Scores are weighted delay plus residual-conflict penalty; lower is better. Regret is the chosen score minus the best measured eligible score at the same state. Violation attempts are actions the policy selected that failed the independent validator; candidates are filtered before ranking, so this should be zero. Mean score fields are descriptive and the CP-SAT mean covers only states where a CP-SAT candidate existed; compare regret instead.",
+  "held_out_scenarios": [
+    "double_line_overtaking",
+    "junction_congestion",
+    "maintenance_window",
+    "cascading_delay",
+    "disruption_recovery",
+    "time_varying_demand"
+  ],
+  "train_scenarios": [
+    "normal_traffic",
+    "evening_peak",
+    "single_line_meet",
+    "delayed_express",
+    "block_closure",
+    "platform_outage",
+    "priority_train"
+  ],
+  "leakage_check": {
+    "train_and_eval_disjoint": true,
+    "note": "Held-out scenarios are never used for training or reward shaping. Different seeds alone would measure stability, not generalisation."
+  },
+  "generated_at": "2026-11-25T05:39:47.248214+00:00",
+  "label_name": "v2_candidate"
+}

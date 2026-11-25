@@ -38,6 +38,10 @@ export interface Scenario {
   train_count: number;
   closure_count: number;
   platform_outage_count: number;
+  disruption_count?: number;
+  service_pattern?: string;
+  tags?: string[];
+  train_categories?: string[];
   label: string;
 }
 
@@ -90,6 +94,9 @@ export interface Metrics {
 export interface Conflict {
   id: string;
   type: string;
+  related_types?: string[];
+  constraint_id?: string | null;
+  constraint_spec_version?: string;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   status: string;
   location: {
@@ -325,6 +332,85 @@ export interface RecommendedCandidate {
   };
   weighted_delay: number | null;
   score: number | null;
+  affected_resources?: {
+    trains: string[];
+    blocks: string[];
+    sections: string[];
+    stations: string[];
+  };
+  predicted_impacts?: Record<string, unknown>;
+  validation_report?: Record<string, unknown>;
+  solver_status?: string | null;
+  ppo_evidence?: {
+    available: boolean;
+    model_version: string | null;
+    policy_probability: number | null;
+    top_candidate_id: string | null;
+    note: string;
+  };
+  trade_offs?: TradeOffs;
+  uncertainty?: Uncertainty;
+  provenance?: Provenance;
+  value_labels?: {
+    calculated: string[];
+    predicted: string[];
+    assumed: string[];
+  };
+}
+
+export interface TradeOffRow {
+  candidate_id: string;
+  label: string;
+  source: string;
+  weighted_delay: number | null;
+  residual_conflicts: number;
+  total_delay_min: number | null;
+  selected: boolean;
+}
+
+export interface TradeOffs {
+  available: boolean;
+  reason?: string;
+  selection_rule?: string;
+  selected?: TradeOffRow | null;
+  eligible_alternatives?: TradeOffRow[];
+  note?: string;
+}
+
+export interface Uncertainty {
+  confidence_percentage: number | null;
+  note?: string;
+  sources_of_uncertainty?: string[];
+  measurement_label?: string;
+}
+
+export interface Provenance {
+  state_version?: number;
+  simulation_time?: string;
+  candidate_id?: string | null;
+  candidate_source?: string | null;
+  conflicts_considered?: string[];
+  constraint_ids?: string[];
+  solver?: Record<string, unknown>;
+  ppo?: Record<string, unknown>;
+  alternatives_considered?: {
+    candidate_id: string;
+    eligible: boolean;
+    score: number | null;
+    source: string;
+    rejection_reason: string | null;
+  }[];
+  versions?: Record<string, string>;
+}
+
+export interface DecisionSupport {
+  human_in_control: boolean;
+  recommendation_is_not_a_decision: boolean;
+  requires_confirmation: boolean;
+  authorized_roles?: string[];
+  recorded_separately?: boolean;
+  allowed_decisions?: string[];
+  note?: string;
 }
 
 export interface Explanation {
@@ -396,6 +482,13 @@ export interface RecommendationDetail {
   };
   parent_recommendation_id: string | null;
   decision: Decision | null;
+  provenance?: Provenance;
+  trade_offs?: TradeOffs;
+  uncertainty?: Uncertainty;
+  decision_support?: DecisionSupport;
+  assumption_spec_version?: string;
+  constraint_spec_version?: string;
+  objective_profile?: string;
 }
 
 export interface Decision {

@@ -103,6 +103,7 @@ describe("Shell", () => {
       "Disruption Management",
       "What-if Simulation",
       "Analytics",
+      "Assumptions & Constraints",
       "Audit Trail",
     ]) {
       expect(screen.getByRole("link", { name: new RegExp(label, "i") })).toBeInTheDocument();
@@ -129,6 +130,7 @@ describe("Shell", () => {
       expect(screen.queryByText("Disruption Management")).not.toBeInTheDocument();
       expect(screen.queryByText("Audit Trail")).not.toBeInTheDocument();
       expect(screen.getByText("Train Movements")).toBeInTheDocument();
+      expect(screen.getByText("Assumptions & Constraints")).toBeInTheDocument();
       expect(screen.queryByText("New simulation")).not.toBeInTheDocument();
       expect(screen.getByText(/Scope: station MLG/)).toBeInTheDocument();
     } finally {

@@ -25,8 +25,14 @@ from .candidates import (
 )
 from .conflicts import detect_conflicts, primary_conflicts
 from .explanation import build_explanation
-from .optimizer import optimise
+from .optimizer import OPTIMIZER_VERSION, optimise
 from .ppo import PPOAgent
+from .spec import (
+    ASSUMPTION_SPEC_VERSION,
+    CONSTRAINT_SPEC_VERSION,
+    SIMULATION_MODEL_VERSION,
+    configured_objective_profile,
+)
 from .state import (
     format_minutes,
     projected_delay,
@@ -152,6 +158,143 @@ def _train_evidence(
     return evidence
 
 
+def _affected_resources(state: dict, action: dict, conflicts: list[dict]) -> dict:
+    trains = {train["id"]: train for train in state["trains"]}
+    train_ids = list(dict.fromkeys([action.get("train_id")] if action.get("train_id") else []))
+    for conflict in primary_conflicts(conflicts, limit=4):
+        for train_id in conflict["trains"]:
+            if train_id not in train_ids:
+                train_ids.append(train_id)
+    blocks: list[str] = []
+    sections: list[str] = []
+    stations: list[str] = []
+    for train_id in train_ids:
+        train = trains.get(train_id)
+        if not train:
+            continue
+        if train.get("block_id") and train["block_id"] not in blocks:
+            blocks.append(train["block_id"])
+        if train.get("section_id") and train["section_id"] not in sections:
+            sections.append(train["section_id"])
+        if train.get("station_id") and train["station_id"] not in stations:
+            stations.append(train["station_id"])
+        for index in range(int(train["route_index"]), len(train["route"]) - 1):
+            segment = train["schedule"][index + 1]
+            if segment.get("block_id") and segment["block_id"] not in blocks:
+                blocks.append(segment["block_id"])
+            if segment.get("section_id") and segment["section_id"] not in sections:
+                sections.append(segment["section_id"])
+            if train["route"][index + 1] not in stations:
+                stations.append(train["route"][index + 1])
+    return {
+        "trains": train_ids,
+        "blocks": blocks[:8],
+        "sections": sections[:8],
+        "stations": stations[:8],
+    }
+
+
+def _provenance(
+    state: dict,
+    selected: dict | None,
+    conflicts: list[dict],
+    optimizer_result: dict,
+    ppo_result: dict,
+    schedule_validation: dict,
+    alternatives: list[dict],
+) -> dict:
+    candidate = selected["candidate"] if selected else None
+    action = candidate["action"] if candidate else None
+    return {
+        "simulation_id": state.get("simulation_id"),
+        "scenario_key": state.get("scenario_key"),
+        "state_version": int(state["version"]),
+        "simulation_time": format_minutes(state["sim_time_min"]),
+        "candidate_id": candidate["id"] if candidate else None,
+        "candidate_source": candidate["source"] if candidate else None,
+        "action": action,
+        "conflicts_considered": [conflict["id"] for conflict in conflicts],
+        "constraint_ids": sorted(
+            {
+                conflict.get("constraint_id")
+                for conflict in conflicts
+                if conflict.get("constraint_id")
+            }
+        ),
+        "solver": {
+            "status": optimizer_result.get("status"),
+            "is_optimal": bool(optimizer_result.get("is_optimal")),
+            "objective_value": optimizer_result.get("objective_value"),
+            "objective_bound": optimizer_result.get("objective_bound"),
+            "objective_profile": optimizer_result.get("objective_profile"),
+            "solve_time_s": optimizer_result.get("solve_time_s"),
+            "optimizer_version": optimizer_result.get("optimizer_version"),
+            "schedule_validation_status": schedule_validation.get("status"),
+        },
+        "ppo": {
+            "available": bool(ppo_result.get("available")),
+            "model_version": ppo_result.get("model_version"),
+            "top_candidate_id": ppo_result.get("top_candidate_id"),
+            "ranking": ppo_result.get("ranking", []),
+            "role": "ranking only; PPO cannot create, filter or execute actions",
+        },
+        "alternatives_considered": [
+            {
+                "candidate_id": item["candidate_id"],
+                "eligible": item["eligible"],
+                "score": item["score"],
+                "source": item["source"],
+                "rejection_reason": item["rejection_reason"],
+            }
+            for item in alternatives
+        ],
+        "versions": {
+            "simulation_model": SIMULATION_MODEL_VERSION,
+            "assumptions": ASSUMPTION_SPEC_VERSION,
+            "constraints": CONSTRAINT_SPEC_VERSION,
+            "optimizer": optimizer_result.get("optimizer_version", OPTIMIZER_VERSION),
+            "validator": "validator-2.0.0",
+        },
+    }
+
+
+def _trade_offs(selected: dict | None, evaluations: list[dict]) -> dict:
+    if not selected:
+        return {"available": False, "reason": "No eligible candidate to compare."}
+    rows = []
+    for item in evaluations:
+        if not item["eligible"]:
+            continue
+        rows.append(
+            {
+                "candidate_id": item["candidate"]["id"],
+                "label": item["candidate"]["label"],
+                "source": item["candidate"]["source"],
+                "weighted_delay": item["weighted_delay"],
+                "residual_conflicts": len(
+                    item["expected_outcome"].get("residual_conflicts", [])
+                ),
+                "total_delay_min": item["expected_outcome"].get("total_delay_min"),
+                "selected": item["candidate"]["id"] == selected["candidate"]["id"],
+            }
+        )
+    selected_row = next((row for row in rows if row["selected"]), None)
+    return {
+        "available": True,
+        "selection_rule": (
+            "lowest measured weighted delay plus residual-conflict penalty among "
+            "independently validated eligible candidates"
+        ),
+        "selected": selected_row,
+        "eligible_alternatives": [row for row in rows if not row["selected"]],
+        "note": (
+            "Trade-offs are measured on cloned simulations. They are not "
+            "guaranteed real-world outcomes and do not encode a controller's "
+            "full operational judgement."
+        ),
+    }
+
+
 def generate_recommendation(
     state: dict,
     *,
@@ -169,6 +312,10 @@ def generate_recommendation(
         "simulation_time_min": int(state["sim_time_min"]),
         "label": "SYNTHETIC",
         "limitations": LIMITATIONS,
+        "assumption_spec_version": ASSUMPTION_SPEC_VERSION,
+        "constraint_spec_version": CONSTRAINT_SPEC_VERSION,
+        "simulation_model_version": SIMULATION_MODEL_VERSION,
+        "objective_profile": configured_objective_profile(),
     }
     problems = validate_state_integrity(state)
     if problems:
@@ -195,6 +342,14 @@ def generate_recommendation(
             ),
             "quantitative_evidence": {},
             "comparison": {},
+            "provenance": {},
+            "trade_offs": {"available": False, "reason": "Incomplete simulation state."},
+            "uncertainty": {"confidence_percentage": None},
+            "decision_support": {
+                "human_in_control": True,
+                "recommendation_is_not_a_decision": True,
+                "requires_confirmation": True,
+            },
         }
 
     conflicts = conflicts if conflicts is not None else detect_conflicts(state, horizon_min)
@@ -484,6 +639,104 @@ def generate_recommendation(
             }
         )
 
+    trade_offs = _trade_offs(selected, evaluations)
+    provenance = _provenance(
+        state,
+        selected,
+        conflicts,
+        optimizer_result,
+        ppo_result,
+        schedule_validation,
+        alternatives,
+    )
+    uncertainty = {
+        "confidence_percentage": None,
+        "note": (
+            "No calibrated confidence percentage is produced. Candidate outcomes "
+            "are deterministic estimates from a cloned synthetic simulation; they "
+            "are not probabilistic forecasts and must not be presented as such."
+        ),
+        "sources_of_uncertainty": [
+            "Synthetic topology, run times and demand are configured assumptions.",
+            "Projection ignores future human decisions and unmodelled perturbations.",
+            "PPO policy probabilities are sampling scores, not calibrated confidence.",
+            "CP-SAT optimality is relative to the configured objective and time limit.",
+        ],
+        "measurement_label": MEASUREMENT_LABEL,
+    }
+    if recommended_payload is not None:
+        recommended_payload.update(
+            {
+                "affected_resources": _affected_resources(
+                    state, recommended_payload["action"], conflicts
+                ),
+                "predicted_impacts": {
+                    "measurement": MEASUREMENT_LABEL,
+                    "total_delay_min": recommended_payload["expected_outcome"].get(
+                        "total_delay_min"
+                    ),
+                    "conflicts_after": recommended_payload["expected_outcome"].get(
+                        "conflicts_after"
+                    ),
+                    "residual_critical": recommended_payload["expected_outcome"].get(
+                        "residual_critical"
+                    ),
+                    "horizon_minutes": apply_minutes,
+                },
+                "validation_report": {
+                    "status": recommended_payload["validation_status"],
+                    "action_validation_status": recommended_payload[
+                        "action_validation_status"
+                    ],
+                    "validator_version": recommended_payload["validation_summary"].get(
+                        "validator_version"
+                    ),
+                    "checks": recommended_payload["validation_summary"],
+                    "schedule_validation_status": schedule_validation.get("status"),
+                    "violations": schedule_validation.get("violations", [])[:5],
+                },
+                "solver_status": optimizer_result.get("status"),
+                "ppo_evidence": {
+                    "available": bool(ppo_result.get("available")),
+                    "model_version": ppo_result.get("model_version"),
+                    "policy_probability": next(
+                        (
+                            entry.get("policy_probability")
+                            for entry in ppo_result.get("ranking", [])
+                            if entry.get("candidate_id")
+                            == recommended_payload["candidate_id"]
+                        ),
+                        None,
+                    ),
+                    "top_candidate_id": ppo_result.get("top_candidate_id"),
+                    "note": "Policy probability is a sampling score, not confidence.",
+                },
+                "trade_offs": trade_offs,
+                "uncertainty": uncertainty,
+                "provenance": provenance,
+                "value_labels": {
+                    "calculated": [
+                        "weighted_delay",
+                        "total_delay_min",
+                        "conflicts_after",
+                        "score",
+                    ],
+                    "predicted": [
+                        "expected_outcome",
+                        "predicted_impacts",
+                        "affected_resources",
+                    ],
+                    "assumed": [
+                        "topology",
+                        "run times",
+                        "headway",
+                        "hold policy",
+                        "platform capacity",
+                    ],
+                },
+            }
+        )
+
     no_intervention = next(
         (
             item
@@ -515,6 +768,10 @@ def generate_recommendation(
         "status": optimizer_result.get("status"),
         "message": optimizer_result.get("message"),
         "objective_value": optimizer_result.get("objective_value"),
+        "objective_bound": optimizer_result.get("objective_bound"),
+        "is_optimal": bool(optimizer_result.get("is_optimal")),
+        "objective_profile": optimizer_result.get("objective_profile"),
+        "objective_weights": optimizer_result.get("objective_weights"),
         "solve_time_s": optimizer_result.get("solve_time_s"),
         "optimizer_version": optimizer_result.get("optimizer_version"),
         "solver": optimizer_result.get("solver"),
@@ -584,8 +841,30 @@ def generate_recommendation(
         "quantitative_evidence": quantitative,
         "comparison": comparison,
         "explanation": explanation,
+        "provenance": provenance,
+        "trade_offs": trade_offs,
+        "uncertainty": uncertainty,
+        "decision_support": {
+            "human_in_control": True,
+            "recommendation_is_not_a_decision": True,
+            "requires_confirmation": True,
+            "authorized_roles": ["SECTION_MASTER"],
+            "recorded_separately": True,
+            "allowed_decisions": [
+                "APPROVE",
+                "REJECT",
+                "MODIFY",
+                "REQUEST_ALTERNATIVES",
+                "DEFER",
+            ],
+            "note": (
+                "This recommendation is advisory. An authorised human controller "
+                "must approve, reject, modify, request alternatives or defer it. "
+                "The decision is recorded separately from the recommendation."
+            ),
+        },
         "model_version": ppo_result.get("model_version", "ppo-unavailable"),
         "optimizer_version": optimizer_result.get("optimizer_version", "cpsat-unknown"),
-        "validator_version": "validator-1.0.0",
+        "validator_version": "validator-2.0.0",
         "data_issues": [],
     }

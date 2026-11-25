@@ -22,6 +22,8 @@ class Station:
     platforms: tuple[str, ...]
     x: float
     is_junction: bool = False
+    platform_length_m: int = 600
+    junction_throat_capacity: int = 2
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,7 @@ class Block:
     id: str
     direction: str  # UP | DOWN | BIDIRECTIONAL
     run_time_min: int
+    gradient_pct: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,7 @@ class Section:
     blocks: tuple[Block, ...]
     headway_min: int = 3
     max_speed_kmph: int = 100
+    distance_km: float = 10.0
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,28 @@ class Network:
     @property
     def section_map(self) -> dict[str, Section]:
         return {section.id: section for section in self.sections}
+
+    @property
+    def block_map(self) -> dict[str, Block]:
+        return {
+            block.id: block
+            for section in self.sections
+            for block in section.blocks
+        }
+
+    def section_for_block(self, block_id: str) -> Section:
+        for section in self.sections:
+            if any(block.id == block_id for block in section.blocks):
+                return section
+        raise TopologyError(f"Unknown block '{block_id}'")
+
+    def adjacent_sections(self, station_id: str) -> list[Section]:
+        self.station(station_id)
+        return [
+            section
+            for section in self.sections
+            if station_id in {section.from_station, section.to_station}
+        ]
 
     def station(self, station_id: str) -> Station:
         try:
@@ -198,6 +224,8 @@ class Network:
                 platforms=tuple(raw["platforms"]),
                 x=float(raw["x"]),
                 is_junction=bool(raw.get("is_junction", False)),
+                platform_length_m=int(raw.get("platform_length_m", 600)),
+                junction_throat_capacity=int(raw.get("junction_throat_capacity", 2)),
             )
             for raw in data["stations"]
         )
@@ -212,11 +240,13 @@ class Network:
                         id=block["id"],
                         direction=block["direction"],
                         run_time_min=int(block["run_time_min"]),
+                        gradient_pct=float(block.get("gradient_pct", 0.0)),
                     )
                     for block in raw["blocks"]
                 ),
                 headway_min=int(raw.get("headway_min", 3)),
                 max_speed_kmph=int(raw.get("max_speed_kmph", 100)),
+                distance_km=float(raw.get("distance_km", 10.0)),
             )
             for raw in data["sections"]
         )
@@ -244,11 +274,17 @@ def build_default_network() -> Network:
         name="Northern Section (Synthetic)",
         timezone="Asia/Kolkata",
         stations=(
-            Station("NDL", "Nandpur Junction", "NDL", ("P1", "P2", "P3"), 0.0, True),
-            Station("KRN", "Karanpur", "KRN", ("P1", "P2"), 1.0),
-            Station("MLG", "Malgaon Junction", "MLG", ("P1", "P2", "P3"), 2.0, True),
-            Station("SRP", "Suryapur", "SRP", ("P1", "P2"), 3.0),
-            Station("VSN", "Vasanth Nagar", "VSN", ("P1", "P2"), 4.0),
+            Station(
+                "NDL", "Nandpur Junction", "NDL", ("P1", "P2", "P3"), 0.0, True,
+                platform_length_m=720, junction_throat_capacity=2,
+            ),
+            Station("KRN", "Karanpur", "KRN", ("P1", "P2"), 1.0, platform_length_m=580),
+            Station(
+                "MLG", "Malgaon Junction", "MLG", ("P1", "P2", "P3"), 2.0, True,
+                platform_length_m=650, junction_throat_capacity=2,
+            ),
+            Station("SRP", "Suryapur", "SRP", ("P1", "P2"), 3.0, platform_length_m=560),
+            Station("VSN", "Vasanth Nagar", "VSN", ("P1", "P2"), 4.0, platform_length_m=600),
         ),
         sections=(
             Section(
@@ -259,6 +295,7 @@ def build_default_network() -> Network:
                 (Block("B1", "BIDIRECTIONAL", 12),),
                 headway_min=4,
                 max_speed_kmph=90,
+                distance_km=14.0,
             ),
             Section(
                 "S2",
@@ -268,6 +305,7 @@ def build_default_network() -> Network:
                 (Block("B2U", "UP", 10), Block("B2D", "DOWN", 10)),
                 headway_min=3,
                 max_speed_kmph=110,
+                distance_km=18.0,
             ),
             Section(
                 "S3",
@@ -277,6 +315,7 @@ def build_default_network() -> Network:
                 (Block("B3", "BIDIRECTIONAL", 14),),
                 headway_min=4,
                 max_speed_kmph=90,
+                distance_km=16.0,
             ),
             Section(
                 "S4",
@@ -286,6 +325,7 @@ def build_default_network() -> Network:
                 (Block("B4U", "UP", 9), Block("B4D", "DOWN", 9)),
                 headway_min=3,
                 max_speed_kmph=110,
+                distance_km=12.0,
             ),
         ),
     )

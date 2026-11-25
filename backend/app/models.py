@@ -150,6 +150,24 @@ class AuditEvent(Base):
     __table_args__ = (Index("ix_audit_event_type", "event_type"),)
 
 
+class AuditChainHead(Base):
+    """Single-row chain head used to detect tail truncation.
+
+    The hash chain alone proves internal consistency, but deleting the final
+    events would still leave a shorter valid chain. This row records the last
+    hash and event count so truncation is detectable.
+    """
+
+    __tablename__ = "audit_chain_head"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    head_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
 class ModelVersion(Base):
     __tablename__ = "model_versions"
 

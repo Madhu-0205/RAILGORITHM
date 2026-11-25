@@ -320,6 +320,87 @@ export function RecommendationDetailPage() {
         </div>
       </Panel>
 
+      <Panel
+        title="Provenance, uncertainty and trade-offs"
+        subtitle="Every value is labelled as calculated, predicted or assumed. No confidence percentage is fabricated."
+      >
+        <div className="grid-two">
+          <div>
+            <dl className="detail-list">
+              <div>
+                <dt>Spec versions</dt>
+                <dd>
+                  assumptions {data.assumption_spec_version ?? "—"} · constraints{" "}
+                  {data.constraint_spec_version ?? "—"} · objective{" "}
+                  {data.objective_profile ?? "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>State version</dt>
+                <dd>{data.provenance?.state_version ?? data.state_version}</dd>
+              </div>
+              <div>
+                <dt>Constraint references</dt>
+                <dd>{data.provenance?.constraint_ids?.join(", ") || "—"}</dd>
+              </div>
+              <div>
+                <dt>Candidate source</dt>
+                <dd>{data.provenance?.candidate_source ?? recommended?.source ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Solver</dt>
+                <dd>
+                  {String(data.provenance?.solver?.status ?? data.optimizer.status)} ·{" "}
+                  {Boolean(data.provenance?.solver?.is_optimal)
+                    ? "optimal for configured objective"
+                    : "not claimed optimal"}
+                </dd>
+              </div>
+              <div>
+                <dt>PPO role</dt>
+                <dd>
+                  {data.ppo.available
+                    ? `${data.ppo.model_version} ranks validated candidates only`
+                    : "unavailable — deterministic baseline used"}
+                </dd>
+              </div>
+            </dl>
+            <p className="muted small">{data.uncertainty?.note}</p>
+          </div>
+          <div>
+            <span className="field-label">Measured trade-offs</span>
+            {data.trade_offs?.available ? (
+              <table className="table compact">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Weighted</th>
+                    <th>Residual</th>
+                    <th>Delay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ...(data.trade_offs.selected ? [data.trade_offs.selected] : []),
+                    ...(data.trade_offs.eligible_alternatives ?? []),
+                  ].map((row) => (
+                    <tr key={row.candidate_id} className={row.selected ? "row-selected" : undefined}>
+                      <td>{row.label}</td>
+                      <td>{numberOrDash(row.weighted_delay)}</td>
+                      <td>{row.residual_conflicts}</td>
+                      <td>{numberOrDash(row.total_delay_min)} min</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="muted">{data.trade_offs?.reason ?? "No eligible alternatives."}</p>
+            )}
+            <p className="muted small">{data.trade_offs?.note}</p>
+          </div>
+        </div>
+      </Panel>
+
       <Panel title="Candidate alternatives" subtitle="Eligibility is decided by validation, not by ranking.">
         <div className="table-scroll">
           <table className="table">

@@ -77,6 +77,55 @@ def test_audit_chain_detects_direct_tampering(tmp_path):
         engine.dispose()
 
 
+def test_audit_chain_detects_tail_truncation(tmp_path):
+    """Deleting the newest events must fail verification via the chain head."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'truncate.db'}", future=True)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = Session()
+    try:
+        for value in (1, 2, 3):
+            append_audit(
+                session,
+                event_type="TEST_EVENT",
+                actor="tester",
+                actor_role="TEST",
+                payload={"value": value},
+            )
+        session.commit()
+        assert verify_audit_chain(session)["valid"] is True
+
+        # Remove the newest event while leaving a locally valid chain behind.
+        session.execute(
+            text(
+                "DELETE FROM audit_events WHERE id = "
+                "(SELECT MAX(id) FROM audit_events)"
+            )
+        )
+        session.commit()
+        session.expire_all()
+        result = verify_audit_chain(session)
+        assert result["valid"] is False
+        assert "head" in result["detail"].lower()
+        assert result["recorded_event_count"] == 3
+        assert result["events"] == 2
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_audit_chain_head_cannot_be_deleted(db_session):
+    try:
+        db_session.execute(text("DELETE FROM audit_chain_head"))
+        db_session.commit()
+    except Exception as exc:  # noqa: BLE001 - DBAPI error type varies
+        db_session.rollback()
+        assert "append-only" in str(exc)
+    else:  # pragma: no cover - the trigger must always fire
+        db_session.rollback()
+        raise AssertionError("audit_chain_head DELETE was not blocked")
+
+
 def test_audit_events_are_append_only_in_database(db_session):
     event_id = db_session.execute(select(AuditEvent.id).limit(1)).scalar_one()
     try:

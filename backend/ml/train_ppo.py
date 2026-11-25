@@ -47,6 +47,9 @@ from app.domain.ppo import (  # noqa: E402
 from app.domain.scenarios import SCENARIOS  # noqa: E402  (validates catalogue import)
 from app.domain.state import advance, apply_action, initialise_state  # noqa: E402
 
+# Training scenarios (Version 1.0 families). Held-out scenarios below are never
+# used for training or reward shaping, so evaluation measures unseen-scenario
+# behaviour rather than re-scoring the training distribution.
 TRAIN_SCENARIOS = [
     "normal_traffic",
     "evening_peak",
@@ -56,9 +59,17 @@ TRAIN_SCENARIOS = [
     "platform_outage",
     "priority_train",
 ]
-EVAL_SCENARIOS = list(TRAIN_SCENARIOS)
+HELD_OUT_SCENARIOS = [
+    "double_line_overtaking",
+    "junction_congestion",
+    "maintenance_window",
+    "cascading_delay",
+    "disruption_recovery",
+    "time_varying_demand",
+]
+EVAL_SCENARIOS = list(HELD_OUT_SCENARIOS)
 
-MODEL_VERSION = "ppo-candidate-ranker-1.0.0"
+MODEL_VERSION = "ppo-candidate-ranker-2.0.0"
 HORIZON_MIN = 75
 APPLY_MINUTES = 45
 STEP_MINUTES = 15
@@ -295,12 +306,22 @@ def ppo_update(
     return stats
 
 
-def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
+def _evaluate_model(
+    model: PolicyNet,
+    *,
+    seeds: list[int],
+    scenarios: list[str],
+    label: str,
+) -> dict:
+    """Deterministic greedy evaluation of one policy on named scenarios/seeds."""
     model.eval()
     rows: list[dict] = []
     skipped = 0
+    inference_times: list[float] = []
+    violation_attempts = 0
+    rejected_candidates = 0
     with torch.no_grad():
-        for scenario in EVAL_SCENARIOS:
+        for scenario in scenarios:
             for seed in seeds:
                 state = initialise_state(scenario, seed_override=seed)
                 warmup = 5 + (seed % 10)
@@ -315,16 +336,23 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
                         continue
                     eligible = prepared["eligible"]
                     payload = prepared["payload"]
+                    rejected_candidates += sum(
+                        1 for item in payload["alternatives"] if not item["eligible"]
+                    )
                     candidates = _candidate_dicts(eligible)
                     global_vector, candidate_matrix = build_features(
                         state, payload["conflicts"], candidates
                     )
+                    started = time.perf_counter()
                     logits, _ = model(
                         torch.from_numpy(global_vector),
                         torch.from_numpy(candidate_matrix),
                     )
                     index = int(torch.argmax(logits).item())
+                    inference_times.append((time.perf_counter() - started) * 1000)
                     chosen = eligible[index]
+                    if not chosen.get("eligible", False):
+                        violation_attempts += 1
                     best = min(
                         (item for item in eligible if item["score"] is not None),
                         key=lambda item: item["score"],
@@ -344,6 +372,7 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
                     rows.append(
                         {
                             "scenario": scenario,
+                            "seed": seed,
                             "policy_score": float(chosen["score"]),
                             "best_score": float(best["score"]),
                             "baseline_score": float(baseline_item["score"]),
@@ -358,6 +387,8 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
                             "policy_residual": len(
                                 chosen["expected_outcome"]["residual_conflicts"]
                             ),
+                            "reward": _reward(chosen, eligible),
+                            "eligible_candidates": len(eligible),
                         }
                     )
                     try:
@@ -368,8 +399,11 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
     model.train()
     if not rows:
         return {
+            "label": label,
             "decisions": 0,
             "skipped": skipped,
+            "scenarios": scenarios,
+            "seeds": seeds,
             "note": "No evaluable decisions were produced.",
         }
     policy_scores = np.asarray([row["policy_score"] for row in rows])
@@ -381,6 +415,7 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
         [row["cpsat_score"] - row["best_score"] for row in cpsat_rows]
     )
     return {
+        "label": label,
         "decisions": len(rows),
         "skipped": skipped,
         "scenarios": sorted({row["scenario"] for row in rows}),
@@ -389,6 +424,9 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
             100 * sum(row["policy_top1_is_best"] for row in rows) / len(rows), 2
         ),
         "mean_regret_vs_best": round(float(np.mean(policy_scores - best_scores)), 3),
+        "median_regret_vs_best": round(
+            float(np.median(policy_scores - best_scores)), 3
+        ),
         "baseline_mean_regret_vs_best": round(
             float(np.mean(baseline_scores - best_scores)), 3
         ),
@@ -406,14 +444,99 @@ def evaluate(model: PolicyNet, *, seeds: list[int]) -> dict:
         "mean_policy_residual_conflicts": round(
             float(np.mean([row["policy_residual"] for row in rows])), 2
         ),
+        "mean_reward": round(float(np.mean([row["reward"] for row in rows])), 4),
+        "mean_eligible_candidates": round(
+            float(np.mean([row["eligible_candidates"] for row in rows])), 2
+        ),
+        "inference_time_ms_mean": round(float(np.mean(inference_times)), 4)
+        if inference_times
+        else None,
+        "inference_time_ms_p95": round(
+            float(np.percentile(inference_times, 95)), 4
+        )
+        if inference_times
+        else None,
+        "violation_attempts": violation_attempts,
+        "candidate_filter_rejections": rejected_candidates,
+        "per_scenario": {
+            scenario: {
+                "decisions": sum(1 for row in rows if row["scenario"] == scenario),
+                "top1_pct": round(
+                    100
+                    * sum(
+                        1
+                        for row in rows
+                        if row["scenario"] == scenario and row["policy_top1_is_best"]
+                    )
+                    / max(1, sum(1 for row in rows if row["scenario"] == scenario)),
+                    2,
+                ),
+            }
+            for scenario in sorted({row["scenario"] for row in rows})
+        },
         "measurement_note": (
             "All evaluation values are measured on synthetic cloned simulations. "
             "Scores are weighted delay plus residual-conflict penalty; lower is better. "
             "Regret is the chosen score minus the best measured eligible score at the "
-            "same state. Mean score fields are descriptive and the CP-SAT mean covers "
+            "same state. Violation attempts are actions the policy selected that failed "
+            "the independent validator; candidates are filtered before ranking, so this "
+            "should be zero. Mean score fields are descriptive and the CP-SAT mean covers "
             "only states where a CP-SAT candidate existed; compare regret instead."
         ),
     }
+
+
+def evaluate(
+    model: PolicyNet,
+    *,
+    seeds: list[int],
+    scenarios: list[str] | None = None,
+    reference_model: PolicyNet | None = None,
+    reference_label: str = "reference",
+) -> dict:
+    """Evaluate on held-out scenarios by default.
+
+    ``reference_model`` allows an old checkpoint to be scored on exactly the
+    same states, so a replacement decision can be evidence-based rather than
+    assumed. No artifact is overwritten by this function.
+    """
+    evaluation = _evaluate_model(
+        model,
+        seeds=seeds,
+        scenarios=list(scenarios or EVAL_SCENARIOS),
+        label="candidate",
+    )
+    if reference_model is not None:
+        reference = _evaluate_model(
+            reference_model,
+            seeds=seeds,
+            scenarios=list(scenarios or EVAL_SCENARIOS),
+            label=reference_label,
+        )
+        evaluation["reference"] = reference
+        evaluation["regret_delta_vs_reference"] = round(
+            float(reference.get("mean_regret_vs_best", 0))
+            - float(evaluation.get("mean_regret_vs_best", 0)),
+            3,
+        )
+        evaluation["improvement_demonstrated"] = bool(
+            evaluation.get("decisions", 0) > 0
+            and reference.get("decisions", 0) > 0
+            and evaluation["mean_regret_vs_best"]
+            < reference["mean_regret_vs_best"]
+        )
+    evaluation["held_out_scenarios"] = list(scenarios or EVAL_SCENARIOS)
+    evaluation["train_scenarios"] = list(TRAIN_SCENARIOS)
+    evaluation["leakage_check"] = {
+        "train_and_eval_disjoint": not bool(
+            set(TRAIN_SCENARIOS) & set(scenarios or EVAL_SCENARIOS)
+        ),
+        "note": (
+            "Held-out scenarios are never used for training or reward shaping. "
+            "Different seeds alone would measure stability, not generalisation."
+        ),
+    }
+    return evaluation
 
 
 def main() -> int:
@@ -429,6 +552,16 @@ def main() -> int:
     parser.add_argument("--value-coef", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=20261121)
     parser.add_argument("--output", type=Path, default=settings.artifact_dir)
+    parser.add_argument(
+        "--eval-seeds", type=int, nargs="+", default=[5000, 5001, 5002, 5003]
+    )
+    parser.add_argument("--eval-scenarios", nargs="*", default=None)
+    parser.add_argument(
+        "--reference-artifact",
+        type=Path,
+        default=None,
+        help="Directory containing the baseline ppo_policy.pt for a same-state comparison.",
+    )
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -485,13 +618,34 @@ def main() -> int:
             flush=True,
         )
 
-    evaluation = evaluate(model, seeds=[5000, 5001, 5002, 5003])
+    reference_model = None
+    reference_metrics = None
+    if args.reference_artifact is not None:
+        from app.domain.ppo import PPOAgent
+
+        reference_agent = PPOAgent(artifact_dir=args.reference_artifact)
+        if reference_agent.available:
+            reference_model = reference_agent.model
+            reference_metrics = reference_agent.metadata.get("evaluation", {})
+    evaluation = evaluate(
+        model,
+        seeds=args.eval_seeds,
+        scenarios=args.eval_scenarios,
+        reference_model=reference_model,
+        reference_label="baseline_v1",
+    )
+    if reference_metrics is not None:
+        evaluation["reference_artifact_metrics"] = reference_metrics
     metadata = {
         "trained": True,
         "status": "TRAINED_AND_EVALUATED",
         "model_version": MODEL_VERSION,
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "training_data": "Synthetic scenarios only; no real railway data.",
+        "evaluation_protocol": (
+            "Held-out scenarios (never used for training or reward shaping) with "
+            "multiple fixed seeds; deterministic greedy action selection."
+        ),
         "observation_space": (
             f"{GLOBAL_DIM} global features + {CANDIDATE_DIM} features per candidate"
         ),
@@ -517,6 +671,8 @@ def main() -> int:
             "seed": args.seed,
             "train_scenarios": TRAIN_SCENARIOS,
             "train_seeds": "1000 + iteration*100 + episode",
+            "eval_scenarios": evaluation.get("held_out_scenarios"),
+            "eval_seeds": args.eval_seeds,
         },
         "episodes": args.iterations * args.episodes_per_iteration,
         "transitions": total_transitions,
@@ -527,10 +683,20 @@ def main() -> int:
             "Trained and evaluated only on synthetic simulation data.",
             "The policy ranks pre-validated candidates; it cannot create or execute actions.",
             "Policy probabilities are sampling scores, not calibrated operational confidence.",
-            "Evaluation shares the same scenario families as training with different seeds; "
-            "this measures stability, not out-of-distribution generalisation.",
+            "Evaluation uses held-out scenario families, but the held-out set is still "
+            "small and synthetic; it is not evidence of real-world generalisation.",
             "Lower scores are better; regret is the comparable metric. Operational decisions remain human.",
+            "This candidate artifact must not replace the baseline checkpoint unless a "
+            "same-state comparison demonstrates lower regret.",
         ],
+        "promotion": {
+            "baseline_checkpoint_replaced": False,
+            "rule": (
+                "Replace backend/ml/artifacts/ppo_policy.pt only if candidate "
+                "mean regret on identical held-out states is strictly lower than "
+                "the baseline checkpoint and no metric regresses materially."
+            ),
+        },
     }
 
     args.output.mkdir(parents=True, exist_ok=True)

@@ -57,6 +57,32 @@ def test_me_returns_current_user(client, station_headers):
     assert body["station_id"] == "MLG"
 
 
+def test_login_is_rate_limited(client):
+    from app.routers.auth import _LOGIN_ATTEMPTS
+
+    _LOGIN_ATTEMPTS.clear()
+    try:
+        responses = [
+            client.post(
+                "/api/v1/auth/login",
+                json={"username": "section.master", "password": "WrongPassword1"},
+            ).status_code
+            for _ in range(12)
+        ]
+        assert responses.count(429) >= 1
+        assert responses[0] == 401
+    finally:
+        _LOGIN_ATTEMPTS.clear()
+
+
+def test_security_headers_are_present(client):
+    response = client.get("/api/v1/health")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
 def test_health_is_public_and_declares_human_control(client):
     response = client.get("/api/v1/health")
     assert response.status_code == 200

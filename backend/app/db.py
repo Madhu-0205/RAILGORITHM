@@ -83,3 +83,13 @@ def init_db() -> None:
                 """
             )
         )
+        # The chain head must be updatable by appends, but never deleted.
+        conn.execute(
+            text(
+                """
+                CREATE TRIGGER IF NOT EXISTS audit_chain_head_no_delete
+                BEFORE DELETE ON audit_chain_head
+                BEGIN SELECT RAISE(ABORT, 'audit_chain_head is append-only'); END;
+                """
+            )
+        )

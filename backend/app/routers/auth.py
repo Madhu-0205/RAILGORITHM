@@ -1,7 +1,10 @@
 """Authentication endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import time
+from collections import defaultdict, deque
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +17,31 @@ from ..security import create_access_token, verify_password
 from ..services.audit import append_audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Small in-process login throttle. This is deliberately simple and is not a
+# substitute for a shared rate limiter in a multi-instance deployment.
+_LOGIN_ATTEMPTS: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _client_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_login_rate(request: Request) -> None:
+    limit = max(1, int(settings.login_rate_limit_per_minute))
+    now = time.monotonic()
+    attempts = _LOGIN_ATTEMPTS[_client_key(request)]
+    while attempts and now - attempts[0] > 60:
+        attempts.popleft()
+    if len(attempts) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Try again in a minute.",
+        )
+    attempts.append(now)
 
 
 def _user_out(user: User) -> UserOut:
@@ -28,7 +56,10 @@ def _user_out(user: User) -> UserOut:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    payload: LoginRequest, request: Request, db: Session = Depends(get_db)
+) -> TokenResponse:
+    _check_login_rate(request)
     user = db.execute(
         select(User).where(User.username == payload.username)
     ).scalar_one_or_none()

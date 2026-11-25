@@ -32,7 +32,7 @@ INVALID = "INVALID"
 INCOMPLETE_DATA = "INCOMPLETE_DATA"
 NO_FEASIBLE_SOLUTION = "NO_FEASIBLE_SOLUTION"
 
-VALIDATOR_VERSION = "validator-1.0.0"
+VALIDATOR_VERSION = "validator-2.0.0"
 CONSTRAINT_CONFIG = {
     "block_exclusive": True,
     "minimum_headway_from_topology": True,
@@ -78,6 +78,7 @@ def _result(
         "assumptions": assumptions or [],
         "violations": violations or [],
         "validator_version": VALIDATOR_VERSION,
+        "constraint_spec_version": "constraints-2.0.0",
         "constraint_config": CONSTRAINT_CONFIG,
         "validated_at": datetime.now(timezone.utc).isoformat(),
         "metadata": metadata or {},

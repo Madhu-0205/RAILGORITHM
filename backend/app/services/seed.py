@@ -1,6 +1,7 @@
 """Idempotent database seeding: users, model registry and a demo simulation."""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -34,8 +35,37 @@ DEMO_USERS = [
 ]
 
 
+def _bootstrap_users() -> list[dict]:
+    """Optional production bootstrap user from environment variables.
+
+    Demo credentials are only seeded when RAILGORITHM_ALLOW_DEMO_CREDENTIALS
+    is enabled. Production deployments must supply an explicit bootstrap user
+    and disable demo credentials.
+    """
+    username = os.getenv("RAILGORITHM_BOOTSTRAP_USERNAME")
+    password = os.getenv("RAILGORITHM_BOOTSTRAP_PASSWORD")
+    if not username or not password:
+        return []
+    return [
+        {
+            "username": username,
+            "password": password,
+            "role": os.getenv("RAILGORITHM_BOOTSTRAP_ROLE", "SECTION_MASTER"),
+            "display_name": os.getenv(
+                "RAILGORITHM_BOOTSTRAP_DISPLAY_NAME", "Bootstrap Controller"
+            ),
+            "station_id": os.getenv("RAILGORITHM_BOOTSTRAP_STATION_ID") or None,
+            "section_id": os.getenv("RAILGORITHM_BOOTSTRAP_SECTION_ID") or None,
+        }
+    ]
+
+
 def seed_users(db: Session) -> None:
-    for entry in DEMO_USERS:
+    entries = []
+    if settings.allow_demo_credentials:
+        entries.extend(DEMO_USERS)
+    entries.extend(_bootstrap_users())
+    for entry in entries:
         existing = db.execute(
             select(User).where(User.username == entry["username"])
         ).scalar_one_or_none()

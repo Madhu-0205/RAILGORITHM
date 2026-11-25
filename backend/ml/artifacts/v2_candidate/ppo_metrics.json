@@ -1,0 +1,332 @@
+{
+  "trained": true,
+  "status": "TRAINED_AND_EVALUATED",
+  "model_version": "ppo-candidate-ranker-2.0.0",
+  "trained_at": "2026-11-25T05:37:32.301974+00:00",
+  "training_data": "Synthetic scenarios only; no real railway data.",
+  "evaluation_protocol": "Held-out scenarios (never used for training or reward shaping) with multiple fixed seeds; deterministic greedy action selection.",
+  "observation_space": "10 global features + 28 features per candidate",
+  "action_space": "Select one of K independently validated candidate actions",
+  "reward_design": "Normalised improvement in weighted delay plus residual-conflict penalty relative to the no-intervention candidate, minus a small step cost.",
+  "global_feature_names": [
+    "sim_time_fraction",
+    "active_trains_scaled",
+    "total_projected_delay_scaled",
+    "max_projected_delay_scaled",
+    "conflict_count_scaled",
+    "primary_severity_scaled",
+    "block_occupancy_fraction",
+    "platform_occupancy_fraction",
+    "completion_fraction",
+    "horizon_fraction"
+  ],
+  "candidate_feature_names": [
+    "action_hold",
+    "action_precedence",
+    "action_platform_reassign",
+    "action_schedule",
+    "action_do_nothing",
+    "hold_min_scaled",
+    "has_hold",
+    "target_priority_scaled",
+    "target_delay_scaled",
+    "target_projected_delay_scaled",
+    "target_is_express",
+    "target_is_freight",
+    "target_at_station",
+    "target_remaining_legs_scaled",
+    "target_max_hold_scaled",
+    "conflict_single_line_crossing",
+    "conflict_headway",
+    "conflict_platform_capacity",
+    "conflict_junction_conflict",
+    "conflict_block_closure",
+    "conflict_delay_risk",
+    "conflict_severity_scaled",
+    "conflict_train_count_scaled",
+    "conflict_headway_scaled",
+    "conflict_platform_capacity_scaled",
+    "conflict_closure_flag",
+    "source_cp_sat",
+    "schedule_hold_count_scaled"
+  ],
+  "training_config": {
+    "iterations": 6,
+    "episodes_per_iteration": 20,
+    "steps_per_episode": 4,
+    "step_minutes": 15,
+    "ppo_epochs": 4,
+    "minibatch": 64,
+    "learning_rate": 0.0003,
+    "gamma": 0.95,
+    "clip": 0.2,
+    "entropy_coef": 0.01,
+    "value_coef": 0.5,
+    "seed": 20261121,
+    "train_scenarios": [
+      "normal_traffic",
+      "evening_peak",
+      "single_line_meet",
+      "delayed_express",
+      "block_closure",
+      "platform_outage",
+      "priority_train"
+    ],
+    "train_seeds": "1000 + iteration*100 + episode",
+    "eval_scenarios": [
+      "double_line_overtaking",
+      "junction_congestion",
+      "maintenance_window",
+      "cascading_delay",
+      "disruption_recovery",
+      "time_varying_demand"
+    ],
+    "eval_seeds": [
+      5000,
+      5001,
+      5002,
+      5003
+    ]
+  },
+  "episodes": 120,
+  "transitions": 403,
+  "training_seconds": 10.5,
+  "history": [
+    {
+      "iteration": 1,
+      "transitions": 67,
+      "policy_loss": -0.216628,
+      "value_loss": 0.02294,
+      "entropy": 1.833937,
+      "batches": 8
+    },
+    {
+      "iteration": 2,
+      "transitions": 70,
+      "policy_loss": -0.141198,
+      "value_loss": 0.042025,
+      "entropy": 1.838356,
+      "batches": 8
+    },
+    {
+      "iteration": 3,
+      "transitions": 66,
+      "policy_loss": -0.16474,
+      "value_loss": 0.2028,
+      "entropy": 1.968352,
+      "batches": 8
+    },
+    {
+      "iteration": 4,
+      "transitions": 67,
+      "policy_loss": -0.031393,
+      "value_loss": 0.044957,
+      "entropy": 1.916454,
+      "batches": 8
+    },
+    {
+      "iteration": 5,
+      "transitions": 66,
+      "policy_loss": 0.216431,
+      "value_loss": 0.124133,
+      "entropy": 1.854695,
+      "batches": 8
+    },
+    {
+      "iteration": 6,
+      "transitions": 67,
+      "policy_loss": -0.151634,
+      "value_loss": 0.016904,
+      "entropy": 1.76225,
+      "batches": 8
+    }
+  ],
+  "evaluation": {
+    "label": "candidate",
+    "decisions": 89,
+    "skipped": 7,
+    "scenarios": [
+      "cascading_delay",
+      "disruption_recovery",
+      "double_line_overtaking",
+      "junction_congestion",
+      "maintenance_window",
+      "time_varying_demand"
+    ],
+    "seeds": [
+      5000,
+      5001,
+      5002,
+      5003
+    ],
+    "policy_top1_matches_measured_best_pct": 61.8,
+    "mean_regret_vs_best": 15.258,
+    "median_regret_vs_best": 0.0,
+    "baseline_mean_regret_vs_best": 16.966,
+    "cpsat_mean_regret_vs_best": 15.571,
+    "mean_policy_score": 293.461,
+    "mean_baseline_score": 295.169,
+    "mean_cpsat_score": 213.844,
+    "mean_policy_total_delay_min": 123.0,
+    "mean_policy_residual_conflicts": 1.39,
+    "mean_reward": 0.1634,
+    "mean_eligible_candidates": 8.18,
+    "inference_time_ms_mean": 0.0586,
+    "inference_time_ms_p95": 0.0663,
+    "violation_attempts": 0,
+    "candidate_filter_rejections": 8,
+    "per_scenario": {
+      "cascading_delay": {
+        "decisions": 16,
+        "top1_pct": 50.0
+      },
+      "disruption_recovery": {
+        "decisions": 9,
+        "top1_pct": 88.89
+      },
+      "double_line_overtaking": {
+        "decisions": 16,
+        "top1_pct": 93.75
+      },
+      "junction_congestion": {
+        "decisions": 16,
+        "top1_pct": 18.75
+      },
+      "maintenance_window": {
+        "decisions": 16,
+        "top1_pct": 100.0
+      },
+      "time_varying_demand": {
+        "decisions": 16,
+        "top1_pct": 31.25
+      }
+    },
+    "measurement_note": "All evaluation values are measured on synthetic cloned simulations. Scores are weighted delay plus residual-conflict penalty; lower is better. Regret is the chosen score minus the best measured eligible score at the same state. Violation attempts are actions the policy selected that failed the independent validator; candidates are filtered before ranking, so this should be zero. Mean score fields are descriptive and the CP-SAT mean covers only states where a CP-SAT candidate existed; compare regret instead.",
+    "reference": {
+      "label": "baseline_v1",
+      "decisions": 89,
+      "skipped": 7,
+      "scenarios": [
+        "cascading_delay",
+        "disruption_recovery",
+        "double_line_overtaking",
+        "junction_congestion",
+        "maintenance_window",
+        "time_varying_demand"
+      ],
+      "seeds": [
+        5000,
+        5001,
+        5002,
+        5003
+      ],
+      "policy_top1_matches_measured_best_pct": 25.84,
+      "mean_regret_vs_best": 16.202,
+      "median_regret_vs_best": 6.0,
+      "baseline_mean_regret_vs_best": 22.775,
+      "cpsat_mean_regret_vs_best": 18.632,
+      "mean_policy_score": 312.202,
+      "mean_baseline_score": 318.775,
+      "mean_cpsat_score": 196.75,
+      "mean_policy_total_delay_min": 95.06,
+      "mean_policy_residual_conflicts": 10.08,
+      "mean_reward": -0.0095,
+      "mean_eligible_candidates": 8.1,
+      "inference_time_ms_mean": 0.0522,
+      "inference_time_ms_p95": 0.0715,
+      "violation_attempts": 0,
+      "candidate_filter_rejections": 8,
+      "per_scenario": {
+        "cascading_delay": {
+          "decisions": 16,
+          "top1_pct": 75.0
+        },
+        "disruption_recovery": {
+          "decisions": 9,
+          "top1_pct": 11.11
+        },
+        "double_line_overtaking": {
+          "decisions": 16,
+          "top1_pct": 31.25
+        },
+        "junction_congestion": {
+          "decisions": 16,
+          "top1_pct": 31.25
+        },
+        "maintenance_window": {
+          "decisions": 16,
+          "top1_pct": 0.0
+        },
+        "time_varying_demand": {
+          "decisions": 16,
+          "top1_pct": 0.0
+        }
+      },
+      "measurement_note": "All evaluation values are measured on synthetic cloned simulations. Scores are weighted delay plus residual-conflict penalty; lower is better. Regret is the chosen score minus the best measured eligible score at the same state. Violation attempts are actions the policy selected that failed the independent validator; candidates are filtered before ranking, so this should be zero. Mean score fields are descriptive and the CP-SAT mean covers only states where a CP-SAT candidate existed; compare regret instead."
+    },
+    "regret_delta_vs_reference": 0.944,
+    "improvement_demonstrated": true,
+    "held_out_scenarios": [
+      "double_line_overtaking",
+      "junction_congestion",
+      "maintenance_window",
+      "cascading_delay",
+      "disruption_recovery",
+      "time_varying_demand"
+    ],
+    "train_scenarios": [
+      "normal_traffic",
+      "evening_peak",
+      "single_line_meet",
+      "delayed_express",
+      "block_closure",
+      "platform_outage",
+      "priority_train"
+    ],
+    "leakage_check": {
+      "train_and_eval_disjoint": true,
+      "note": "Held-out scenarios are never used for training or reward shaping. Different seeds alone would measure stability, not generalisation."
+    },
+    "reference_artifact_metrics": {
+      "decisions": 102,
+      "skipped": 8,
+      "scenarios": [
+        "block_closure",
+        "delayed_express",
+        "evening_peak",
+        "normal_traffic",
+        "platform_outage",
+        "priority_train",
+        "single_line_meet"
+      ],
+      "seeds": [
+        5000,
+        5001,
+        5002,
+        5003
+      ],
+      "policy_top1_matches_measured_best_pct": 55.88,
+      "mean_regret_vs_best": 19.51,
+      "baseline_mean_regret_vs_best": 21.422,
+      "cpsat_mean_regret_vs_best": 31.214,
+      "mean_policy_score": 323.049,
+      "mean_baseline_score": 324.961,
+      "mean_cpsat_score": 161.8,
+      "mean_policy_total_delay_min": 103.98,
+      "mean_policy_residual_conflicts": 4.61,
+      "measurement_note": "All evaluation values are measured on synthetic cloned simulations. Scores are weighted delay plus residual-conflict penalty; lower is better. Regret is the chosen score minus the best measured eligible score at the same state. Mean score fields are descriptive and the CP-SAT mean covers only states where a CP-SAT candidate existed; compare regret instead."
+    }
+  },
+  "limitations": [
+    "Trained and evaluated only on synthetic simulation data.",
+    "The policy ranks pre-validated candidates; it cannot create or execute actions.",
+    "Policy probabilities are sampling scores, not calibrated operational confidence.",
+    "Evaluation uses held-out scenario families, but the held-out set is still small and synthetic; it is not evidence of real-world generalisation.",
+    "Lower scores are better; regret is the comparable metric. Operational decisions remain human.",
+    "This candidate artifact must not replace the baseline checkpoint unless a same-state comparison demonstrates lower regret."
+  ],
+  "promotion": {
+    "baseline_checkpoint_replaced": false,
+    "rule": "Replace backend/ml/artifacts/ppo_policy.pt only if candidate mean regret on identical held-out states is strictly lower than the baseline checkpoint and no metric regresses materially."
+  }
+}
