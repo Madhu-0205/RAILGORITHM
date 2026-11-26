@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=80)
     password: str = Field(min_length=8, max_length=128)
+    portal: str | None = Field(default=None, description="Optional portal restriction: STATION_MASTER | SECTION_CONTROLLER | ADMIN")
 
 
 class UserOut(BaseModel):
@@ -18,6 +19,46 @@ class UserOut(BaseModel):
     display_name: str
     station_id: str | None
     section_id: str | None
+    zone: str | None = None
+    division: str | None = None
+    control_area: str | None = None
+    assigned_stations: list[str] = Field(default_factory=list)
+    assigned_sections: list[str] = Field(default_factory=list)
+    active: bool = True
+    last_login_at: str | None = None
+
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(min_length=3, max_length=32)
+    display_name: str = Field(min_length=3, max_length=120)
+    station_id: str | None = None
+    section_id: str | None = None
+    zone: str | None = None
+    division: str | None = None
+    control_area: str | None = None
+    assigned_stations: list[str] = Field(default_factory=list)
+    assigned_sections: list[str] = Field(default_factory=list)
+
+
+class UserUpdateRequest(BaseModel):
+    display_name: str | None = None
+    role: str | None = None
+    active: bool | None = None
+    station_id: str | None = None
+    section_id: str | None = None
+    zone: str | None = None
+    division: str | None = None
+    control_area: str | None = None
+    assigned_stations: list[str] | None = None
+    assigned_sections: list[str] | None = None
+    password: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -50,6 +91,8 @@ class DecisionRequest(BaseModel):
     rationale: str = Field(min_length=5, max_length=4000)
     modifications: dict[str, Any] | None = None
     confirm_apply: bool = False
+    feedback_category: str | None = None
+    structured_rationale_tag: str | None = None
 
     @field_validator("action")
     @classmethod

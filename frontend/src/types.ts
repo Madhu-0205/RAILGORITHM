@@ -1,4 +1,4 @@
-export type Role = "SECTION_MASTER" | "STATION_MASTER";
+export type Role = "SECTION_MASTER" | "SECTION_CONTROLLER" | "STATION_MASTER" | "ADMIN";
 
 export interface User {
   id: string;
@@ -7,6 +7,13 @@ export interface User {
   display_name: string;
   station_id: string | null;
   section_id: string | null;
+  zone?: string | null;
+  division?: string | null;
+  control_area?: string | null;
+  assigned_stations?: string[];
+  assigned_sections?: string[];
+  active?: boolean;
+  last_login_at?: string | null;
 }
 
 export interface LoginResponse {
@@ -262,6 +269,136 @@ export interface Dashboard {
   role_scope: { role: Role; station_id: string | null; section_id: string | null };
 }
 
+export interface EvidenceItem {
+  id: string;
+  category: string;
+  source: string;
+  fact: string;
+  evidence_class: 'OBSERVED' | 'CALCULATED' | 'PREDICTED' | 'HEURISTIC' | 'UNKNOWN' | 'STALE' | 'NO_DATA';
+  confidence_or_status?: string;
+  timestamp?: string;
+}
+
+export interface StructuredEvidence {
+  A_situation?: {
+    title: string;
+    content: string;
+    evidence_class: string;
+    operational_posture: string;
+    active_trains_count: number;
+    corridor_state: string;
+  };
+  B_detection?: {
+    title: string;
+    primary_conflict_type: string;
+    location_summary: string;
+    time_to_conflict_min: number;
+    evidence_class: string;
+  };
+  C_evidence?: {
+    title: string;
+    items: EvidenceItem[];
+  };
+  D_constraints?: {
+    title: string;
+    hard_constraints_checked: Array<{ id: string; description: string; status: string }>;
+    soft_constraints_evaluated: Array<{ id: string; description: string; penalty_weight: number }>;
+  };
+  E_recommended_action?: {
+    title: string;
+    action_type: string;
+    target_train_id: string;
+    location: string;
+    parameters: Record<string, unknown>;
+    operational_rationale: string;
+  };
+  F_expected_outcome?: {
+    title: string;
+    metrics: Record<string, unknown>;
+    conflict_reduction: number;
+    throughput_impact: string;
+  };
+  G_alternative_actions?: {
+    title: string;
+    feasible_alternatives_count: number;
+    alternatives_summary: Array<{ label: string; outcome_delay_min: number; status: string }>;
+  };
+  H_no_action_consequence?: {
+    title: string;
+    content: string;
+    evidence_class: string;
+    baseline_metrics?: Record<string, unknown>;
+  };
+  I_trade_offs?: {
+    title: string;
+    gained: string[];
+    sacrificed: string[];
+  };
+  J_uncertainty?: {
+    title: string;
+    content: string;
+    confidence_available: boolean;
+    uncertainty_range_min?: number;
+    data_quality_caveat?: string;
+  };
+  K_validity?: {
+    title: string;
+    state_version: number;
+    valid_until_sim_time: string;
+    revalidation_triggers: string[];
+  };
+}
+
+export interface ComparisonMatrixItem {
+  attribute: string;
+  recommended: string | number;
+  best_alternative: string | number;
+  no_action_baseline: string | number;
+  operational_significance: string;
+}
+
+export interface DevelopingDelay {
+  train_id: string;
+  train_name: string;
+  train_type: string;
+  category: 'OBSERVED_DELAY' | 'DEVELOPING_DELAY' | 'PREDICTED_DETENTION' | 'RECOVERY_OPPORTUNITY';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  current_delay_min: number;
+  projected_delay_range: {
+    min_delay_min: number;
+    expected_delay_min: number;
+    max_delay_min: number;
+  };
+  primary_driver: string;
+  bottleneck_location: string;
+  actionability: 'ACTIONABLE_NOW' | 'MONITOR_CLOSELY' | 'INFORMATION_ONLY';
+}
+
+export interface DelayPropagationGraph {
+  nodes: Array<{
+    id: string;
+    label: string;
+    train_id: string;
+    train_type: string;
+    current_delay_min: number;
+    projected_delay_min: number;
+    cascade_depth: number;
+  }>;
+  edges: Array<{
+    source_train_id: string;
+    target_train_id: string;
+    dependency_type: 'HEADWAY_FOLLOWING' | 'CROSSING_MEET_PASS' | 'PLATFORM_BOTTLENECK';
+    location: string;
+    delay_transferred_min: number;
+  }>;
+  cascade_chains: Array<{
+    initiating_train_id: string;
+    chain_length: number;
+    total_accumulated_delay_min: number;
+    impacted_trains: string[];
+  }>;
+}
+
 export interface RecommendationSummary {
   id: string;
   status: string;
@@ -275,6 +412,8 @@ export interface RecommendationSummary {
   is_stale: boolean;
   state_version: number;
   sim_time: string;
+  urgency_category?: string;
+  overall_quality_state?: string;
 }
 
 export interface CandidateOutcome {
@@ -417,6 +556,66 @@ export interface Explanation {
   headline: string;
   questions: Record<string, string>;
   limitations: string[];
+  structured_reasoning?: Record<string, unknown>;
+}
+
+export interface PredictiveRegulation {
+  decision_urgency?: {
+    urgency_category: string;
+    time_to_act_min: number | null;
+    decision_window_label: string;
+    critical_location: string | null;
+    earliest_conflict_time: string | null;
+    action_required: boolean;
+  };
+  multi_horizon_projections?: Array<{
+    horizon_min: number;
+    horizon_label: string;
+    target_time: string;
+    total_conflicts: number;
+    actionable_conflicts: number;
+    critical_conflicts: number;
+    projected_total_delay_min: number;
+    conflict_types: string[];
+  }>;
+  train_delay_trends?: Record<string, {
+    trend: string;
+    rate_min_per_hour: number;
+    primary_cause: string;
+    cause_description: string;
+    current_delay_min: number;
+    projected_final_delay_min: number;
+  }>;
+  knock_on_propagation?: {
+    delayed_train_id: string;
+    affected_train_count: number;
+    total_knock_on_delay_min: number;
+    affected_trains: Array<{
+      train_id: string;
+      name: string;
+      priority: number;
+      train_type: string;
+      knock_on_delay_min: number;
+      bottleneck_location: string | null;
+    }>;
+    bottleneck_locations: string[];
+  };
+  comparative_timeline?: {
+    available: boolean;
+    focus_train_id?: string;
+    focus_train_name?: string;
+    stations?: Array<{
+      station_id: string;
+      scheduled_arrival: string;
+      no_action_arrival: string;
+      recommended_arrival: string;
+      alternative_arrival?: string;
+      delay_savings_min: number;
+    }>;
+    net_delay_savings_min?: number;
+  };
+  developing_delays?: DevelopingDelay[];
+  propagation_graph?: DelayPropagationGraph;
 }
 
 export interface RecommendationDetail {
@@ -482,6 +681,23 @@ export interface RecommendationDetail {
   };
   parent_recommendation_id: string | null;
   decision: Decision | null;
+  predictive_regulation?: PredictiveRegulation;
+  structured_evidence?: StructuredEvidence;
+  comparison_matrix?: ComparisonMatrixItem[];
+  data_quality?: {
+    overall_quality_state: string;
+    is_eligible_for_recommendations: boolean;
+    stale_input_warning: boolean;
+    items?: Record<string, { quality_state: string; detail: string; critical: boolean }>;
+    issues?: string[];
+  };
+  confidence_disclosure?: {
+    confidence_label: string;
+    is_calibrated: boolean;
+    display_percentage: number | null;
+    explanation: string;
+    safety_note?: string;
+  };
   provenance?: Provenance;
   trade_offs?: TradeOffs;
   uncertainty?: Uncertainty;
@@ -506,6 +722,13 @@ export interface Decision {
   model_version: string;
   optimizer_version: string;
   execution_mode: string;
+  feedback_category?: string | null;
+  structured_rationale_tag?: string | null;
+  predicted_outcome?: Record<string, unknown> | null;
+  actual_outcome?: Record<string, unknown> | null;
+  prediction_error?: Record<string, unknown> | null;
+  data_quality?: Record<string, unknown> | null;
+  three_way_comparison?: Record<string, unknown> | null;
 }
 
 export interface Analytics {
@@ -725,4 +948,394 @@ export interface SectionControllerKpis {
     created_at: string | null;
   }[];
   kpi_definitions: Record<string, string>;
+}
+
+// ==========================================
+// ROLE-SEPARATED WORKSPACES TYPES
+// ==========================================
+
+export interface StationMasterOverview {
+  station_id: string;
+  station_name: string;
+  station_code: string;
+  is_junction: boolean;
+  operational_status: "NORMAL" | "CONGESTED" | "REGULATED" | "DEGRADED";
+  simulation_time: string;
+  sim_time_min: number;
+  summary_counts: {
+    total_scheduled_today: number;
+    monitored_window_trains: number;
+    arriving_next_30m: number;
+    departing_next_30m: number;
+    through_next_30m: number;
+    currently_at_station: number;
+    delayed_trains_count: number;
+    on_time_trains_count: number;
+  };
+  adherence: {
+    schedule_adherence_pct: number | null;
+    adherence_status: "NORMAL" | "DEGRADED" | "NO_DATA";
+    explanation: string;
+    punctuality_threshold_min: number;
+    average_delay_min: number | null;
+  };
+  platform_summary: {
+    total_platforms: number;
+    available: number;
+    occupied: number;
+    outage: number;
+    occupancy_pct: number;
+  };
+  data_quality: {
+    overall_status: string;
+    feed_status: string;
+    confidence_score: number;
+    freshness_seconds: number;
+    is_stale: boolean;
+  };
+}
+
+export interface StationTrack {
+  track_id: string;
+  track_name: string;
+  category: "PLATFORM" | "LOOP_LINE" | "SIDING" | "SHUNTING_NECK";
+  line_type: string;
+  state: "CLEAR" | "OCCUPIED" | "RESERVED" | "RESTRICTED" | "BLOCKED" | "STALE" | "UNKNOWN";
+  length_m: number;
+  electrified: boolean;
+  max_speed_kmph: number;
+  occupied_by: {
+    train_id: string;
+    name: string;
+    type: string;
+    priority: number;
+    direction: string;
+    origin: string;
+    destination: string;
+    delay_min: number;
+  } | null;
+  route_locked: boolean;
+  locked_for_train: string | null;
+  restrictions?: string | null;
+}
+
+export interface StationMasterLayout {
+  station_id: string;
+  station_name: string;
+  station_code: string;
+  is_junction: boolean;
+  junction_throat_capacity: number;
+  throat_status: string;
+  tracks: StationTrack[];
+  berthing_capacity_total_m: number;
+  speed_restrictions: {
+    location: string;
+    speed_limit_kmph: number;
+    reason: string;
+  }[];
+}
+
+export interface MovementBoardEntry {
+  train_id: string;
+  train_name: string;
+  train_type: string;
+  priority: number;
+  direction: string;
+  origin: string;
+  destination: string;
+  scheduled_arrival: string | null;
+  estimated_arrival: string | null;
+  scheduled_departure: string | null;
+  estimated_departure: string | null;
+  assigned_platform: string | null;
+  status: "ON_TIME" | "DELAYED" | "EARLY";
+  delay_min: number;
+  speed_kmph: number;
+  line_clear_status: string;
+  dwell_min: number;
+  traction: string;
+}
+
+export interface StationMasterMovementBoard {
+  station_id: string;
+  simulation_time: string;
+  sim_time_min: number;
+  window_ahead_min: number;
+  arriving: MovementBoardEntry[];
+  departing: MovementBoardEntry[];
+  through: MovementBoardEntry[];
+  history: MovementBoardEntry[];
+}
+
+export interface AdjacentStationInfo {
+  station_id: string;
+  station_name: string;
+  code: string;
+  relative_position: string;
+  distance_km: number;
+  section_id: string;
+  section_mode: "SINGLE" | "DOUBLE";
+  headway_min: number;
+  blocks: {
+    block_id: string;
+    direction: string;
+    signaling_type: string;
+    state: "CLEAR" | "OCCUPIED" | "CLOSED";
+    train: {
+      train_id: string;
+      train_name: string;
+      direction: string;
+      speed_kmph: number;
+    } | null;
+  }[];
+  line_clear_status: string;
+  last_movement_event: {
+    message: string;
+    time: string;
+  };
+  telemetry_freshness_seconds: number;
+}
+
+export interface StationMasterAdjacentStations {
+  station_id: string;
+  station_name: string;
+  simulation_time: string;
+  sim_time_min: number;
+  upstream_station: AdjacentStationInfo | null;
+  downstream_station: AdjacentStationInfo | null;
+  junction_branches: {
+    branch_id: string;
+    name: string;
+    mode: string;
+    length_km: number;
+    status: string;
+    signaling: string;
+  }[];
+}
+
+export interface StationMasterAlerts {
+  station_id: string;
+  station_name: string;
+  simulation_time: string;
+  sim_time_min: number;
+  active_conflicts: Conflict[];
+  pending_recommendations: {
+    id: string;
+    label: string;
+    action: string;
+    confidence: number;
+    explanation: string;
+    evidence_status: string;
+    safety_checks: { rule: string; name: string; status: string }[];
+    created_at: string | null;
+  }[];
+}
+
+export interface MonitoredStationSummary {
+  station_id: string;
+  station_name: string;
+  code: string;
+  km_marker: number;
+  is_junction: boolean;
+  total_platforms: number;
+  occupied_platforms: number;
+  available_platforms: number;
+  throat_status: string;
+}
+
+export interface SectionControllerOverview {
+  section_name: string;
+  operating_boundaries: string;
+  control_area: string;
+  simulation_time: string;
+  sim_time_min: number;
+  kpis: {
+    monitored_stations_count: number;
+    trains_active: number;
+    trains_delayed: number;
+    trains_total: number;
+    average_delay_min: number;
+    total_delay_min: number;
+    punctuality_pct: number;
+    blocks_total: number;
+    blocks_occupied: number;
+    block_occupancy_pct: number;
+    critical_bottlenecks_count: number;
+    bottlenecks_occupied_count: number;
+    active_conflicts_count: number;
+    delay_propagation_index: number;
+  };
+  monitored_stations: MonitoredStationSummary[];
+  data_quality: {
+    status: string;
+    feed_status: string;
+    confidence_score: number;
+    freshness_seconds: number;
+    is_stale: boolean;
+  };
+}
+
+export interface SectionControllerTopology {
+  corridor_length_km: number;
+  stations: {
+    station_id: string;
+    name: string;
+    code: string;
+    km: number;
+    is_junction: boolean;
+    platforms_count: number;
+  }[];
+  sections: {
+    section_id: string;
+    from_station: string;
+    to_station: string;
+    mode: string;
+    distance_km: number;
+    max_speed_kmph: number;
+    headway_min: number;
+    traction_type: string;
+    blocks: {
+      block_id: string;
+      direction: string;
+      signaling_type: string;
+      run_time_min: number;
+      is_occupied: boolean;
+      occupant_train: string | null;
+      km_start: number;
+      km_end: number;
+    }[];
+  }[];
+  speed_restrictions: {
+    section_id: string;
+    km_location: number;
+    speed_limit_kmph: number;
+    reason: string;
+  }[];
+  signaling_territory: string;
+}
+
+export interface TrainLedgerEntry {
+  train_id: string;
+  train_name: string;
+  train_type: string;
+  priority: number;
+  direction: string;
+  origin: string;
+  destination: string;
+  status: string;
+  current_location: string;
+  current_km: number | null;
+  speed_kmph: number;
+  delay_min: number;
+  projected_delay_min: number;
+  precedence_class: string;
+  crew_duty_hours: number;
+  eta_section_exit: string;
+}
+
+export interface SectionControllerTrainLedger {
+  simulation_time: string;
+  sim_time_min: number;
+  total_trains: number;
+  trains: TrainLedgerEntry[];
+}
+
+export interface BlockBoardEntry {
+  block_id: string;
+  section_id: string;
+  from_station: string;
+  to_station: string;
+  mode: string;
+  direction: string;
+  signaling_type: string;
+  signal_aspect: "GREEN" | "YELLOW" | "DOUBLE_YELLOW" | "RED";
+  state: "CLEAR" | "OCCUPIED" | "BLOCKED" | "MAINTENANCE";
+  occupant_train: {
+    train_id: string;
+    train_name: string;
+    direction: string;
+    speed_kmph: number;
+    delay_min: number;
+  } | null;
+  headway_min: number;
+  axle_counter_status: string;
+  telemetry_freshness_seconds: number;
+}
+
+export interface SectionControllerBlockBoard {
+  simulation_time: string;
+  sim_time_min: number;
+  total_blocks: number;
+  occupied_blocks: number;
+  blocks: BlockBoardEntry[];
+}
+
+export interface JunctionCrossingScenario {
+  id: string;
+  junction_id: string;
+  junction_name: string;
+  conflict_type: string;
+  train_a: {
+    train_id: string;
+    name: string;
+    type: string;
+    priority: number;
+    direction: string;
+    current_delay_min: number;
+  };
+  train_b: {
+    train_id: string;
+    name: string;
+    type: string;
+    priority: number;
+    direction: string;
+    current_delay_min: number;
+  };
+  recommended_resolution: {
+    action: string;
+    loop_station?: string;
+    loop_track?: string;
+    crossing_station?: string;
+    holding_train?: string;
+    holding_track?: string;
+    through_train?: string;
+    explanation: string;
+    delay_impact_train_a_min: number;
+    delay_impact_train_b_min: number;
+    net_corridor_saving_min: number;
+    safety_constraints_verified: { rule: string; name: string; status: string }[];
+  };
+  alternative_option: {
+    action: string;
+    explanation: string;
+    delay_impact_train_a_min: number;
+    delay_impact_train_b_min: number;
+    net_corridor_penalty_min: number;
+  };
+}
+
+export interface SectionControllerJunctionWorkspace {
+  simulation_time: string;
+  sim_time_min: number;
+  monitored_junctions: string[];
+  active_scenarios: JunctionCrossingScenario[];
+  conflicts_count: number;
+}
+
+export interface SectionControllerAlerts {
+  simulation_time: string;
+  sim_time_min: number;
+  conflicts: Conflict[];
+  recommendations: {
+    id: string;
+    label: string;
+    action: string;
+    affected_trains: string[];
+    affected_stations: string[];
+    confidence: number;
+    explanation: string;
+    evidence_status: string;
+    disagreement: boolean;
+    created_at: string | null;
+  }[];
 }

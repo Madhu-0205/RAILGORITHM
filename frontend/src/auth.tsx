@@ -13,7 +13,7 @@ import type { User } from "./types";
 interface AuthContextValue {
   user: User | null;
   initialising: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, portal?: string) => Promise<User>;
   logout: () => void;
 }
 
@@ -45,15 +45,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const response = await api.login(username, password);
+  const login = useCallback(async (username: string, password: string, portal?: string) => {
+    const response = await api.login(username, password, portal);
     setToken(response.access_token);
     setUser(response.user);
+    return response.user;
   }, []);
 
-  const logout = useCallback(() => {
-    setToken(null);
-    setUser(null);
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Invalidate client session even if network fails
+    } finally {
+      setToken(null);
+      setUser(null);
+    }
   }, []);
 
   const value = useMemo(

@@ -361,7 +361,12 @@ def section_controller_kpis(db: Session, simulation: Simulation) -> dict:
     
     mlg_throat_trains = [
         t["id"] for t in active_trains
-        if (t.get("station_id") == "MLG" and t.get("entry_min", now) <= now <= t.get("exit_min", now))
+        if (
+            t.get("station_id") == "MLG"
+            and (t.get("entry_min") if t.get("entry_min") is not None else now)
+            <= now
+            <= (t.get("exit_min") if t.get("exit_min") is not None else now)
+        )
         or t.get("block_id") in mlg_adjacent_blocks
         or t.get("current_location") in mlg_adjacent_blocks
     ]

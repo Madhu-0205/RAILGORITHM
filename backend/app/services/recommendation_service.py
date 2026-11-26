@@ -174,6 +174,13 @@ def serialize_decision(decision: Decision) -> dict:
         "model_version": decision.model_version,
         "optimizer_version": decision.optimizer_version,
         "execution_mode": "SIMULATED_ONLY",
+        "feedback_category": getattr(decision, "feedback_category", None),
+        "structured_rationale_tag": getattr(decision, "structured_rationale_tag", None),
+        "predicted_outcome": getattr(decision, "predicted_outcome", None),
+        "actual_outcome": getattr(decision, "actual_outcome", None),
+        "prediction_error": getattr(decision, "prediction_error", None),
+        "data_quality": getattr(decision, "data_quality", None),
+        "three_way_comparison": getattr(decision, "three_way_comparison", None),
     }
 
 
@@ -190,11 +197,19 @@ def list_records(
     if status:
         query = query.where(Recommendation.status == status)
     records = db.execute(query).scalars().all()
-    if actor.role == "STATION_MASTER" and actor.station_id:
+    if actor.is_station_master():
+        allowed_stations = set(actor.get_stations())
         records = [
             record
             for record in records
-            if actor.station_id in record.payload.get("affected_stations", [])
+            if any(st in allowed_stations for st in record.payload.get("affected_stations", []))
+        ]
+    elif actor.is_section_controller() and actor.control_area not in {None, "CORRIDOR"}:
+        allowed_stations = set(actor.get_stations())
+        records = [
+            record
+            for record in records
+            if any(st in allowed_stations for st in record.payload.get("affected_stations", []))
         ]
     return records
 

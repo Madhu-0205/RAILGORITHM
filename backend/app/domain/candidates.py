@@ -101,6 +101,93 @@ def generate_candidates(
                 )
             )
 
+    # Intelligent crossing, precedence, and loop line overtaking actions
+    for conflict in primary_conflicts(conflicts, limit=4):
+        c_trains = [trains.get(tid) for tid in conflict["trains"] if trains.get(tid)]
+        if len(c_trains) >= 2:
+            c_trains.sort(key=lambda t: (int(t.get("priority", 3)), int(t.get("delay_min", 0))))
+            higher_p = c_trains[0]
+            lower_p = c_trains[1]
+
+            # 1. Crossing meet-pass dynamic hold (Permutation 1: Hold lower priority train)
+            if conflict["type"] in {"SINGLE_LINE_CROSSING", "CROSSING_CONFLICT"}:
+                headway = int(conflict.get("evidence", {}).get("headway_min", 5))
+                dur = max(3, int(conflict.get("end_min", now + 10)) - int(conflict.get("start_min", now)) + headway)
+                
+                # Option 1A: Regulate lower priority train
+                if lower_p["status"] in {"AT_STATION", "WAITING"}:
+                    st_id = lower_p.get("station_id") or lower_p.get("origin")
+                    st_info = next((s for s in state["network"]["stations"] if s["id"] == st_id), None)
+                    loop_note = "Station has loop line capacity." if (st_info and len(st_info.get("platforms", [])) > 1) else "Single platform station."
+                    dynamic_hold = min(int(lower_p["max_hold_min"]), dur)
+                    if dynamic_hold > 0:
+                        candidates.append(
+                            _candidate(
+                                {
+                                    "type": "HOLD",
+                                    "train_id": lower_p["id"],
+                                    "station_id": st_id,
+                                    "hold_min": dynamic_hold,
+                                    "crossing_sequence": f"{higher_p['id']}_BEFORE_{lower_p['id']}",
+                                },
+                                f"Sequence: {higher_p['id']} before {lower_p['id']} (Hold {lower_p['id']} at {st_id} for {dynamic_hold} min)",
+                                f"Regulate lower-priority train {lower_p['id']} (priority {lower_p.get('priority')}) to clear single line block for {higher_p['id']} (priority {higher_p.get('priority')}). {loop_note}",
+                            )
+                        )
+
+                # Option 1B: Alternative sequence: Regulate higher priority train (e.g. if higher priority already heavily delayed)
+                if higher_p["status"] in {"AT_STATION", "WAITING"}:
+                    st_id_h = higher_p.get("station_id") or higher_p.get("origin")
+                    dynamic_hold_h = min(int(higher_p["max_hold_min"]), dur)
+                    if dynamic_hold_h > 0:
+                        candidates.append(
+                            _candidate(
+                                {
+                                    "type": "HOLD",
+                                    "train_id": higher_p["id"],
+                                    "station_id": st_id_h,
+                                    "hold_min": dynamic_hold_h,
+                                    "crossing_sequence": f"{lower_p['id']}_BEFORE_{higher_p['id']}",
+                                },
+                                f"Alternative Sequence: {lower_p['id']} before {higher_p['id']} (Hold {higher_p['id']} at {st_id_h} for {dynamic_hold_h} min)",
+                                f"Alternative crossing sequence: Hold {higher_p['id']} at {st_id_h} to allow {lower_p['id']} to clear the single line section first.",
+                            )
+                        )
+
+                # Option 1C: Alternative crossing location at Malgaon Junction (MLG) with loop capacity
+                if "MLG" in lower_p.get("route", []) and lower_p["status"] in {"AT_STATION", "WAITING"} and lower_p.get("station_id") != "MLG":
+                    candidates.append(
+                        _candidate(
+                            {
+                                "type": "HOLD",
+                                "train_id": lower_p["id"],
+                                "station_id": "MLG",
+                                "hold_min": 5,
+                                "crossing_location": "MLG",
+                            },
+                            f"Alternative Crossing Location: Advance meet to Malgaon Junction (MLG)",
+                            f"Advance crossing point to junction station MLG (km 50) utilizing multi-platform loop capacity.",
+                        )
+                    )
+
+            # 2. Overtaking on loop lines for double-line / following conflicts
+            if conflict["type"] in {"OVERTAKING_CONFLICT", "HEADWAY"} and lower_p["status"] == "AT_STATION":
+                st_id = lower_p["station_id"]
+                st_info = next((s for s in state["network"]["stations"] if s["id"] == st_id), None)
+                if st_info and len(st_info.get("platforms", [])) > 1:
+                    candidates.append(
+                        _candidate(
+                            {
+                                "type": "HOLD",
+                                "train_id": lower_p["id"],
+                                "station_id": st_id,
+                                "hold_min": 8,
+                            },
+                            f"Hold {lower_p['id']} at {st_id} for 8 min (Loop overtake)",
+                            f"Loop line overtake: Hold {lower_p['id']} (priority {lower_p.get('priority')}) to allow higher-priority {higher_p['id']} (priority {higher_p.get('priority')}) to overtake.",
+                        )
+                    )
+
     for conflict in primary_conflicts(conflicts, limit=2):
         if conflict["type"] != "PLATFORM_CAPACITY":
             continue

@@ -1,8 +1,8 @@
-# RAILGORITHM 2.6 — Railway Operational Visualization & Interface Excellence Verification Report
+# RAILGORITHM 2.7 — Section Controller Control Office Redesign Verification Report
 
 **Date:** 25 November 2026  
-**Version:** 2.6.0  
-**Scope:** Signature Railway Operational Visualizations: Section Controller Master Time-Distance Train Graph (`TimeDistanceGraph.tsx`), Station Master Working & Interlocking Yard Diagram (`StationWorkingDiagram.tsx`), Corridor Block Section Occupancy Matrix (`BlockOccupancyMatrix.tsx`), Station Operational Train Board (`StationTrainBoard.tsx`), Formal KPI Registry (`kpiRegistry.ts` / `docs/KPI_REGISTRY_V2_6.md`), WCAG 2.1 AA Accessibility, and Complete End-to-End Test Suite Verification.  
+**Version:** 2.7.0  
+**Scope:** Section Controller Desktop-First Control Office Console Redesign (`Dashboard.tsx`), Multi-Station Territory Control Strip (`StationControlStrip.tsx`), Inline Station Yard Electronic Interlocking Inspection, Time-Distance Master Graph Upgrades (`TimeDistanceGraph.tsx`), Operational Attention Panel (`OperationalAttentionPanel.tsx`), Section Train Movement & Regulation Ledger (`TrainMovementLedger.tsx`), Crossing, Precedence & AI Regulation Workspace (`ConflictRegulationWorkspace.tsx`), Operational Restrictions & Incident Management (`RestrictionsAndIncidentsPanel.tsx`), Control Office Coordination & Shift Handover Console (`CoordinationAndHandover.tsx`), and Complete End-to-End Test Suite Verification.  
 **Classification:** Synthetic Simulation & Operational Decision-Support Testbed. Strictly read-only live telemetry ingestion. Zero autonomous control.  
 **Human Authority:** Every operational recommendation requires explicit human verification, authorization, and confirmation by a Station Master or Section Controller before physical adoption. Cryptographically sealed in an append-only SHA-256 hash chain.
 
@@ -10,24 +10,26 @@
 
 ## 1. Executive Summary & Verification Verdict
 
-RAILGORITHM 2.6 delivers operational interface excellence, providing Station Masters and Section Controllers with familiar, domain-authentic digital control room visualizations:
+RAILGORITHM 2.7 transforms the Section Controller experience from a fragmented dashboard into a unified, high-density, professional **Section Controller Control Office Console**:
 
-1. **Master Time-Distance Train Graph:** Full vector SVG string chart tracking train movements against physical corridor chainages ($0.0\text{ km}$ Nandpur to $60.0\text{ km}$ Vasanthpur), single-line bottleneck highlighting (Sections S1 and S3), directional slopes (UP vs DOWN), and interactive inspection.
-2. **Station Working & Interlocking Diagram:** Electronic Interlocking (EI) VDU layout rendering reception lines, platforms, main running lines, loop lines, diamond crossing throat, and signals with real-time sensor inspection.
-3. **Block Section Occupancy Matrix:** Comprehensive Absolute Block status monitoring across all corridor block sections (`B1`, `B2U`, `B2D`, `B3`, `B4U`, `B4D`), tracking line clear states, speed limits, and transit windows.
-4. **Station Operational Train Board:** Electronic passenger and operational board with live multi-attribute filtering and status classification.
-5. **Formal KPI Registry:** Exhaustive documentation of all mathematical formulas, physical units, reporting horizons, and epistemic certainty classifications.
+1. **Control Header Bar:** Active Section Controller identity (`SC-402`), shift indicator (`Day Shift 06:00–14:00`), territory selector dropdown (`NDL-VSN Mainline Corridor`, `MLG Suburban Branch Loop`, `KRN-SRP Quad Freight Bypass`), synchronized wall-clock IST and simulated operating clocks, real-time telemetry health indicator with latency tracking ($4.2\text{ s}$), and unacknowledged critical alerts counter badge.
+2. **12 Standardized Section KPIs:** Active Corridor Trains, Average Section Delay, Block Occupancy %, Junction Throat Load (MLG), Corridor Throughput, Delay Propagation Index (DPI), Delayed Trains, Route Conflicts, Recovery Clearance Rate, Running vs Berthed Trains, Active Speed Restrictions (TSR/PSR), and Pending Regulation Decisions.
+3. **Multi-Station Territory Control Strip:** Continuous horizontal operational strip rendering all configured territory stations (`NDL`, `KRN`, `MLG`, `SRP`, `VSN`) with live movement aggregation (approaching, berthed, departed, delayed), platform berth availability, and caution indicators.
+4. **Inline Station Yard Inspection Console:** 1-click drill-down opening mirrored Electronic Interlocking (`StationWorkingDiagram`), platform slots (`StationPlatformBerths`), and arrival/departure board (`StationTrainBoard`) without leaving Section Controller mode.
+5. **Master Section Controller Graph Centerpiece:** Dynamic station chainage scaling computed directly from network topology ($0.0\text{ km}$ to $60.0\text{ km}$), pan navigation controls (`◀ -30m`, `Center Now ⏱`, `+30m ▶`), multi-duration viewport scaling ($2\text{h}$, $3\text{h}$, $6\text{h}$, $12\text{h}$), train category filtering, forecast trajectory toggles, and single-line bottleneck territory shading (Sections S1 and S3).
+6. **Operational Attention Panel:** Prioritized severity triage queue (`CRITICAL`, `HIGH`, `MEDIUM`, `INFORMATIONAL`) with rule citations (G&SR Rule 4.16, GR 1.02(62), SEM Part II) and Section Controller acknowledgement tracking.
+7. **The 6 Integrated Control Workspaces:** Corridor Blocks & Bottlenecks, Section Train Movement & Regulation Ledger, Crossing & AI Regulation Workspace, Engineering Restrictions & Incidents, and Control Office Coordination & Shift Handover Console.
 
 ### Verification Verdict: FULLY PASSED & EVIDENCE VALIDATED
-- **Backend Test Suite:** **244 passed** (`pytest` 9.2.0; 100% pass rate in $8.89\text{ s}$).
-- **Frontend Test Suite:** **57 passed** across 13 test suites (`vitest` 4.1.12; 100% pass rate in $6.19\text{ s}$).
-- **Total Automated Tests:** **301 tests passed** (100% pass rate).
+- **Backend Test Suite:** **244 passed** (`pytest` 9.2.0; 100% pass rate in $7.28\text{ s}$).
+- **Frontend Test Suite:** **77 passed** across 19 test suites (`vitest` 4.1.12; 100% pass rate in $9.28\text{ s}$).
+- **Total Automated Tests:** **321 tests passed** (100% pass rate).
 - **TypeScript Typecheck:** Clean (`tsc --noEmit` exits 0 with 0 errors).
-- **Production Build:** Clean production build (`npm run build` completed cleanly; `dist/assets/index-ColWsMkQ.js` [427.9 kB], `dist/assets/index-C7Czv-3t.css` [24.0 kB]).
+- **Production Build:** Clean production build (`npm run build` completed cleanly; `dist/assets/index-BjJRl0Q8.js` [481.73 kB], `dist/assets/index-C7Czv-3t.css` [24.00 kB] in 1.29s).
 
 ---
 
-## 2. Historical Version 2.5 Verification Summary
+## 2. Historical Version 2.6 Verification Summary
 
 Full raw results recorded in `backend/ml/reports/e2e_benchmark_v2_5.json`:
 

@@ -370,4 +370,87 @@ describe("DashboardPage Role Intelligence", () => {
     fireEvent.change(searchInput, { target: { value: "NonExistent" } });
     expect(screen.getByText("No matching train movements")).toBeInTheDocument();
   });
+
+  it("renders Section Controller Control Office header with territory selector and operational clocks", async () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("CONTROL DESK: SC-402")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Territory:/i)).toBeInTheDocument();
+    expect(screen.getByText(/IST Clock:/i)).toBeInTheDocument();
+    expect(screen.getByText(/07:00:00 IST/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sim Time:/i)).toBeInTheDocument();
+    expect(screen.getByText(/T\+420m/i)).toBeInTheDocument();
+    expect(screen.getByText(/● HEALTHY TELEMETRY/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /select control territory/i })).toBeInTheDocument();
+  });
+
+  it("renders Multi-Station Territory Control Strip and toggles inline station yard inspection", async () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Multi-Station Territory Control Strip")).toBeInTheDocument();
+    });
+
+    // Check station codes rendered in strip
+    expect(screen.getAllByText("NDL").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("KRN").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("MLG").length).toBeGreaterThan(0);
+
+    // Click Karanpur card to inspect yard
+    const krnBtn = screen.getByRole("button", { name: /Inspect Karanpur/i });
+    fireEvent.click(krnBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Station Master Yard Inspection — Karanpur \(KRN\)/i)).toBeInTheDocument();
+    });
+
+    // Close inspection
+    const closeBtn = screen.getByRole("button", { name: /Close Station Inspection ✕/i });
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByText(/Station Master Yard Inspection — Karanpur \(KRN\)/i)).not.toBeInTheDocument();
+  });
+
+  it("switches between control office workspaces via navigation tabs", async () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Section Controller Corridor Dashboard")).toBeInTheDocument();
+    });
+
+    // Tab to Train Movement Ledger
+    const ledgerTab = screen.getByRole("button", { name: "Train Movement Ledger" });
+    fireEvent.click(ledgerTab);
+    expect(screen.getByText(/Section Train Movement & Regulation Ledger/i)).toBeInTheDocument();
+
+    // Tab to Conflict Regulation
+    const regTab = screen.getByRole("button", { name: "Conflict & AI Regulation" });
+    fireEvent.click(regTab);
+    expect(screen.getByText(/Crossing, Precedence & Train Regulation Workspace/i)).toBeInTheDocument();
+
+    // Tab to Restrictions & Incidents
+    const restrTab = screen.getByRole("button", { name: "TSR / PSR & Incidents" });
+    fireEvent.click(restrTab);
+    expect(screen.getByText(/Operational Restrictions & Incident Management Workspace/i)).toBeInTheDocument();
+
+    // Tab to Coordination & Shift Handover
+    const handoverTab = screen.getByRole("button", { name: "Coordination & Shift Handover" });
+    fireEvent.click(handoverTab);
+    expect(screen.getByText(/Control Office Coordination & Shift Handover Workspace/i)).toBeInTheDocument();
+  });
 });
