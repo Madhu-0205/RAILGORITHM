@@ -99,14 +99,40 @@ export function DashboardPage() {
   const { user } = useAuth();
   const { selectedId, revision } = useSimulation();
 
-  // Role view toggle
-  const defaultMode = user?.role === "STATION_MASTER" ? "STATION" : "SECTION";
+  // Role view toggle & jurisdiction locking
+  const isStationMaster = user?.role === "STATION_MASTER";
+  const isAdmin = user?.role === "ADMIN";
+  const defaultMode = isStationMaster ? "STATION" : "SECTION";
   const [viewMode, setViewMode] = useState<"STATION" | "SECTION">(defaultMode);
-  const [stationId, setStationId] = useState<string>(user?.station_id || "MLG");
+
+  // Authorized station scope
+  const authorizedStations = useMemo(() => {
+    if (isStationMaster) {
+      if (user?.assigned_stations && user.assigned_stations.length > 0) return user.assigned_stations;
+      if (user?.station_id) return [user.station_id];
+      return ["MLG"];
+    }
+    // Section Controller or Administrator: full territory stations
+    if (user?.assigned_stations && user.assigned_stations.length > 0) return user.assigned_stations;
+    if (user?.control_area === "NORTHERN_CONTROL_AREA") return ["NDL", "KRN", "MLG"];
+    if (user?.control_area === "SOUTHERN_CONTROL_AREA") return ["MLG", "SRP", "VSN"];
+    return ["NDL", "KRN", "MLG", "SRP", "VSN"];
+  }, [user, isAdmin, isStationMaster]);
+
+  const [stationId, setStationId] = useState<string>(() => {
+    if (user?.station_id && authorizedStations.includes(user.station_id)) return user.station_id;
+    return authorizedStations.includes("MLG") ? "MLG" : authorizedStations[0] || "MLG";
+  });
   const [showDefinitions, setShowDefinitions] = useState(false);
 
-  // Section Controller Redesign state (v2.7)
-  const [selectedTerritory, setSelectedTerritory] = useState("NDL-VSN Mainline Corridor (Southern Division)");
+  // Section Controller jurisdiction state
+  const defaultTerritory = useMemo(() => {
+    if (user?.control_area === "NORTHERN_CONTROL_AREA") return "NDL-MLG Northern Control Area";
+    if (user?.control_area === "SOUTHERN_CONTROL_AREA") return "MLG-VSN Southern Control Area";
+    return "NDL-VSN Mainline Corridor (Southern Division)";
+  }, [user]);
+
+  const [selectedTerritory, setSelectedTerritory] = useState(defaultTerritory);
   const [inspectStationId, setInspectStationId] = useState<string | null>(null);
   const [activeSectionTab, setActiveSectionTab] = useState<"ALL" | "GRAPH" | "BLOCKS" | "LEDGER" | "REGULATION" | "RESTRICTIONS" | "HANDOVER">("ALL");
   const [selectedLedgerTrainId, setSelectedLedgerTrainId] = useState<string | null>(null);
@@ -271,51 +297,72 @@ export function DashboardPage() {
           </p>
         </div>
         <div className="heading-badges flex-row gap-2 items-center">
-          {/* Role view toggle buttons */}
-          <div className="button-group">
-            <button
-              type="button"
-              className={`button button-small ${viewMode === "STATION" ? "button-primary" : "button-ghost"}`}
-              onClick={() => setViewMode("STATION")}
-            >
-              Station View
-            </button>
-            <button
-              type="button"
-              className={`button button-small ${viewMode === "SECTION" ? "button-primary" : "button-ghost"}`}
-              onClick={() => setViewMode("SECTION")}
-            >
-              Section View
-            </button>
-          </div>
+          {/* Role view toggle buttons - available for Section Controllers and Admins */}
+          {!isStationMaster ? (
+            <div className="button-group">
+              <button
+                type="button"
+                className={`button button-small ${viewMode === "STATION" ? "button-primary" : "button-ghost"}`}
+                onClick={() => setViewMode("STATION")}
+              >
+                Station View
+              </button>
+              <button
+                type="button"
+                className={`button button-small ${viewMode === "SECTION" ? "button-primary" : "button-ghost"}`}
+                onClick={() => setViewMode("SECTION")}
+              >
+                Section View
+              </button>
+            </div>
+          ) : (
+            <span className="badge badge-accent" style={{ fontWeight: 600 }}>
+              STATION MASTER JURISDICTION
+            </span>
+          )}
 
           {viewMode === "STATION" && (
-            <select
-              className="select-small"
-              value={stationId}
-              onChange={(e) => setStationId(e.target.value)}
-              title="Select station to monitor"
-            >
-              <option value="NDL">NDL — Nandpur</option>
-              <option value="KRN">KRN — Karanpur</option>
-              <option value="MLG">MLG — Malgaon Junction</option>
-              <option value="SRP">SRP — Suryapur</option>
-              <option value="VSN">VSN — Vasanthpur</option>
-            </select>
+            authorizedStations.length > 1 ? (
+              <select
+                className="select-small"
+                value={stationId}
+                onChange={(e) => setStationId(e.target.value)}
+                title="Select authorized station to monitor"
+              >
+                {authorizedStations.map((code) => {
+                  const st = corridorStations.find((s) => s.id === code);
+                  return (
+                    <option key={code} value={code}>
+                      {code} — {st?.name || code}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <span className="badge badge-default" style={{ background: "#0F172A", color: "#38BDF8", border: "1px solid #1E293B", padding: "4px 8px" }}>
+                📍 {currentStation?.name || stationId} ({stationId})
+              </span>
+            )
           )}
 
           {viewMode === "SECTION" && (
-            <select
-              className="select-small"
-              value={selectedTerritory}
-              onChange={(e) => setSelectedTerritory(e.target.value)}
-              title="Select control territory"
-              aria-label="Select control territory"
-            >
-              <option value="NDL-VSN Mainline Corridor (Southern Division)">NDL–VSN Mainline (Southern Div)</option>
-              <option value="MLG Junction Suburban Branch Loop">MLG Suburban Branch Loop</option>
-              <option value="KRN-SRP Quad Track Freight Bypass">KRN–SRP Quad Freight Bypass</option>
-            </select>
+            (user?.control_area === "NORTHERN_CONTROL_AREA" || user?.control_area === "SOUTHERN_CONTROL_AREA") ? (
+              <span className="badge badge-default" style={{ background: "#0F172A", color: "#38BDF8", border: "1px solid #1E293B", padding: "4px 8px" }}>
+                📍 {selectedTerritory}
+              </span>
+            ) : (
+              <select
+                className="select-small"
+                value={selectedTerritory}
+                onChange={(e) => setSelectedTerritory(e.target.value)}
+                title="Select control territory"
+                aria-label="Select control territory"
+              >
+                <option value="NDL-VSN Mainline Corridor (Southern Division)">NDL–VSN Mainline (Southern Div)</option>
+                <option value="MLG Junction Suburban Branch Loop">MLG Suburban Branch Loop</option>
+                <option value="KRN-SRP Quad Track Freight Bypass">KRN–SRP Quad Freight Bypass</option>
+              </select>
+            )
           )}
 
           <StatusBadge status={data.simulation.status} />

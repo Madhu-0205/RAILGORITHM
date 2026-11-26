@@ -1,7 +1,8 @@
 """Simulation, dashboard, disruption and what-if endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+import copy
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -44,39 +45,73 @@ router = APIRouter(prefix="/simulations", tags=["simulations"])
 
 
 def _scoped_conflicts(simulation: Simulation, user: User, conflicts: list[dict]) -> list[dict]:
-    if user.role != "STATION_MASTER" or not user.station_id:
+    if user.is_admin():
         return conflicts
-    scope = user.station_id
-    result = []
-    for conflict in conflicts:
-        location = conflict.get("location", {})
-        if location.get("station_id") == scope:
-            result.append(conflict)
-            continue
-        if location.get("section_id"):
-            section = next(
-                (
-                    item
-                    for item in simulation.state["network"]["sections"]
-                    if item["id"] == location["section_id"]
-                ),
-                None,
-            )
-            if section and scope in {section["from_station"], section["to_station"]}:
+    if user.is_station_master():
+        allowed_stations = set(user.get_stations())
+        if not allowed_stations:
+            return []
+        result = []
+        for conflict in conflicts:
+            location = conflict.get("location", {})
+            if location.get("station_id") in allowed_stations:
                 result.append(conflict)
                 continue
-        if location.get("block_id"):
-            for section in simulation.state["network"]["sections"]:
-                if any(block["id"] == location["block_id"] for block in section["blocks"]):
-                    if scope in {section["from_station"], section["to_station"]}:
-                        result.append(conflict)
-                    break
-    return result
+            if location.get("section_id"):
+                section = next(
+                    (
+                        item
+                        for item in simulation.state["network"]["sections"]
+                        if item["id"] == location["section_id"]
+                    ),
+                    None,
+                )
+                if section and (section["from_station"] in allowed_stations or section["to_station"] in allowed_stations):
+                    result.append(conflict)
+                    continue
+            if location.get("block_id"):
+                for section in simulation.state["network"]["sections"]:
+                    if any(block["id"] == location["block_id"] for block in section["blocks"]):
+                        if section["from_station"] in allowed_stations or section["to_station"] in allowed_stations:
+                            result.append(conflict)
+                        break
+        return result
+    if user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}:
+        allowed_stations = set(user.get_stations())
+        result = []
+        for conflict in conflicts:
+            location = conflict.get("location", {})
+            if location.get("station_id") in allowed_stations:
+                result.append(conflict)
+                continue
+            if location.get("section_id"):
+                section = next(
+                    (
+                        item
+                        for item in simulation.state["network"]["sections"]
+                        if item["id"] == location["section_id"]
+                    ),
+                    None,
+                )
+                if section and (section["from_station"] in allowed_stations or section["to_station"] in allowed_stations):
+                    result.append(conflict)
+                    continue
+            if location.get("block_id"):
+                for section in simulation.state["network"]["sections"]:
+                    if any(block["id"] == location["block_id"] for block in section["blocks"]):
+                        if section["from_station"] in allowed_stations or section["to_station"] in allowed_stations:
+                            result.append(conflict)
+                        break
+        return result
+    return conflicts
 
 
 def _recommendation_summary(db: Session, record, simulation: Simulation) -> dict:
     payload = record.payload
     recommended = payload.get("recommended") or {}
+    pred_reg = payload.get("predictive_regulation") or {}
+    urgency = pred_reg.get("decision_urgency") or {}
+    dq = payload.get("data_quality") or {}
     return {
         "id": record.id,
         "status": record.status,
@@ -91,6 +126,8 @@ def _recommendation_summary(db: Session, record, simulation: Simulation) -> dict
         and int(record.state_version) != int(simulation.state_version),
         "state_version": record.state_version,
         "sim_time": payload.get("simulation_time"),
+        "urgency_category": urgency.get("urgency_category", "MONITORING"),
+        "overall_quality_state": dq.get("overall_quality_state", "SIMULATION"),
     }
 
 
@@ -152,24 +189,67 @@ def dashboard(
     records = list_records(db, simulation, actor=user)
     pending = [record for record in records if record.status == "PENDING"]
     model = metadata_summary()
+
+    all_trains = view["trains"]
+    all_blocks = view["block_occupancy"]
+    all_platforms = view["platforms"]
+    all_closures = view["closures"]
+    all_outages = view["platform_outages"]
+
+    # Jurisdiction filtering
+    if user.is_station_master():
+        st_set = set(user.get_stations())
+        scoped_trains = [
+            t for t in all_trains
+            if t.get("station_id") in st_set or any(st in st_set for st in t.get("route", []))
+        ]
+        scoped_platforms = [p for p in all_platforms if p.get("station_id") in st_set]
+        sec_set = set(user.get_sections())
+        scoped_blocks = [
+            b for b in all_blocks
+            if b.get("station_id") in st_set or b.get("section_id") in sec_set
+        ]
+        scoped_closures = [c for c in all_closures if c.get("section_id") in sec_set]
+        scoped_outages = [o for o in all_outages if o.get("station_id") in st_set]
+    elif user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}:
+        st_set = set(user.get_stations())
+        sec_set = set(user.get_sections())
+        scoped_trains = [
+            t for t in all_trains
+            if t.get("station_id") in st_set or any(st in st_set for st in t.get("route", []))
+        ]
+        scoped_platforms = [p for p in all_platforms if p.get("station_id") in st_set]
+        scoped_blocks = [
+            b for b in all_blocks
+            if b.get("station_id") in st_set or b.get("section_id") in sec_set
+        ]
+        scoped_closures = [c for c in all_closures if c.get("section_id") in sec_set]
+        scoped_outages = [o for o in all_outages if o.get("station_id") in st_set]
+    else:
+        scoped_trains = all_trains
+        scoped_platforms = all_platforms
+        scoped_blocks = all_blocks
+        scoped_closures = all_closures
+        scoped_outages = all_outages
+
     occupied_blocks = [
-        item for item in view["block_occupancy"] if item.get("occupied_by")
+        item for item in scoped_blocks if item.get("occupied_by")
     ]
     available_platforms = [
-        item for item in view["platforms"] if item["status"] == "AVAILABLE"
+        item for item in scoped_platforms if item["status"] == "AVAILABLE"
     ]
     now = view["sim_time_min"]
     active_closures = [
         closure
-        for closure in view["closures"]
+        for closure in scoped_closures
         if closure["start_min"] <= now < closure["end_min"]
     ]
     upcoming_closures = [
-        closure for closure in view["closures"] if closure["start_min"] > now
+        closure for closure in scoped_closures if closure["start_min"] > now
     ]
     active_outages = [
         outage
-        for outage in view["platform_outages"]
+        for outage in scoped_outages
         if outage["start_min"] <= now < outage["end_min"]
     ]
     return {
@@ -187,17 +267,17 @@ def dashboard(
             "timezone": view["timezone"],
         },
         "metrics": view["metrics"],
-        "trains": view["trains"],
-        "active_trains": [train for train in view["trains"] if train["status"] != "COMPLETED"],
+        "trains": scoped_trains,
+        "active_trains": [train for train in scoped_trains if train["status"] != "COMPLETED"],
         "delayed_trains": [
-            train for train in view["trains"] if train["projected_delay_min"] > 5
+            train for train in scoped_trains if train["projected_delay_min"] > 5
         ],
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
         "occupied_blocks": occupied_blocks,
         "available_platforms": available_platforms,
-        "closures": view["closures"],
-        "platform_outages": view["platform_outages"],
+        "closures": scoped_closures,
+        "platform_outages": scoped_outages,
         "active_closures": active_closures,
         "upcoming_closures": upcoming_closures,
         "active_outages": active_outages,
@@ -224,6 +304,18 @@ def dashboard(
             "station_id": user.station_id,
             "section_id": user.section_id,
         },
+        "jurisdiction": {
+            "role": user.role,
+            "display_name": user.display_name,
+            "station_id": user.station_id,
+            "section_id": user.section_id,
+            "zone": user.zone or "SWR",
+            "division": user.division or "Southern Division",
+            "control_area": user.control_area or "CORRIDOR",
+            "authorized_stations": user.get_stations(),
+            "authorized_sections": user.get_sections(),
+            "is_restricted_scope": user.is_station_master() or (user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}),
+        },
     }
 
 
@@ -233,11 +325,25 @@ def trains(
     user: User = Depends(get_current_user),
 ) -> dict:
     view = simulation_view(simulation)
+    train_list = view["trains"]
+    if user.is_station_master():
+        st_set = set(user.get_stations())
+        train_list = [
+            t for t in train_list
+            if t.get("station_id") in st_set or any(st in st_set for st in t.get("route", []))
+        ]
+    elif user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}:
+        st_set = set(user.get_stations())
+        train_list = [
+            t for t in train_list
+            if t.get("station_id") in st_set or any(st in st_set for st in t.get("route", []))
+        ]
     return {
         "sim_time": view["sim_time"],
         "state_version": view["state_version"],
-        "trains": view["trains"],
+        "trains": train_list,
         "label": "SYNTHETIC",
+        "jurisdiction_filtered": user.is_station_master() or (user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}),
     }
 
 
@@ -247,15 +353,48 @@ def network(
     user: User = Depends(get_current_user),
 ) -> dict:
     view = simulation_view(simulation)
+    net = copy.deepcopy(view["network"])
+    block_occ = view["block_occupancy"]
+    platforms = view["platforms"]
+    closures = view["closures"]
+    outages = view["platform_outages"]
+
+    if user.is_station_master():
+        st_set = set(user.get_stations())
+        neighbor_stations = set(st_set)
+        for sec in net["sections"]:
+            if sec["from_station"] in st_set:
+                neighbor_stations.add(sec["to_station"])
+            if sec["to_station"] in st_set:
+                neighbor_stations.add(sec["from_station"])
+        net["stations"] = [s for s in net["stations"] if s["id"] in neighbor_stations]
+        net["sections"] = [s for s in net["sections"] if s["from_station"] in st_set or s["to_station"] in st_set]
+        allowed_sec_ids = {s["id"] for s in net["sections"]}
+        block_occ = [b for b in block_occ if b.get("section_id") in allowed_sec_ids or b.get("station_id") in st_set]
+        platforms = [p for p in platforms if p.get("station_id") in st_set]
+        closures = [c for c in closures if c.get("section_id") in allowed_sec_ids]
+        outages = [o for o in outages if o.get("station_id") in st_set]
+    elif user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}:
+        st_set = set(user.get_stations())
+        sec_set = set(user.get_sections())
+        net["stations"] = [s for s in net["stations"] if s["id"] in st_set]
+        net["sections"] = [s for s in net["sections"] if s["id"] in sec_set]
+        allowed_sec_ids = {s["id"] for s in net["sections"]}
+        block_occ = [b for b in block_occ if b.get("section_id") in allowed_sec_ids or b.get("station_id") in st_set]
+        platforms = [p for p in platforms if p.get("station_id") in st_set]
+        closures = [c for c in closures if c.get("section_id") in allowed_sec_ids]
+        outages = [o for o in outages if o.get("station_id") in st_set]
+
     return {
-        "network": view["network"],
-        "block_occupancy": view["block_occupancy"],
-        "platforms": view["platforms"],
-        "closures": view["closures"],
-        "platform_outages": view["platform_outages"],
+        "network": net,
+        "block_occupancy": block_occ,
+        "platforms": platforms,
+        "closures": closures,
+        "platform_outages": outages,
         "sim_time": view["sim_time"],
         "state_version": view["state_version"],
         "label": "SYNTHETIC",
+        "jurisdiction_filtered": user.is_station_master() or (user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}),
     }
 
 
@@ -269,11 +408,14 @@ def conflicts(
     return {
         "conflicts": scoped,
         "total_detected": len(detected),
-        "scope_filtered": user.role == "STATION_MASTER",
+        "scope_filtered": user.is_station_master() or (user.is_section_controller() and user.control_area not in {None, "CORRIDOR"}),
         "scope": {
             "role": user.role,
             "station_id": user.station_id,
             "section_id": user.section_id,
+            "authorized_stations": user.get_stations(),
+            "authorized_sections": user.get_sections(),
+            "control_area": user.control_area,
         },
         "sim_time": simulation.state["sim_time_min"],
         "state_version": simulation.state_version,
@@ -285,8 +427,8 @@ def conflicts(
 def advance(
     payload: AdvanceRequest,
     db: Session = Depends(get_db),
-    simulation: Simulation = Depends(get_simulation),
     user: User = Depends(require_roles("SECTION_MASTER")),
+    simulation: Simulation = Depends(get_simulation),
 ) -> dict:
     advance_simulation(db, simulation, minutes=payload.minutes, actor=user)
     return simulation_view(simulation)
@@ -296,8 +438,8 @@ def advance(
 def pause(
     payload: PauseRequest,
     db: Session = Depends(get_db),
-    simulation: Simulation = Depends(get_simulation),
     user: User = Depends(require_roles("SECTION_MASTER")),
+    simulation: Simulation = Depends(get_simulation),
 ) -> dict:
     set_pause_state(db, simulation, paused=payload.paused, actor=user)
     return simulation_view(simulation)
@@ -306,8 +448,8 @@ def pause(
 @router.post("/{simulation_id}/reset")
 def reset(
     db: Session = Depends(get_db),
-    simulation: Simulation = Depends(get_simulation),
     user: User = Depends(require_roles("SECTION_MASTER")),
+    simulation: Simulation = Depends(get_simulation),
 ) -> dict:
     reset_simulation(db, simulation, actor=user)
     return simulation_view(simulation)
@@ -317,8 +459,8 @@ def reset(
 def disruption(
     payload: DisruptionRequest,
     db: Session = Depends(get_db),
-    simulation: Simulation = Depends(get_simulation),
     user: User = Depends(require_roles("SECTION_MASTER")),
+    simulation: Simulation = Depends(get_simulation),
 ) -> dict:
     apply_disruption(
         db,
@@ -364,6 +506,11 @@ def station_analytics(
     user: User = Depends(get_current_user),
 ) -> dict:
     target = station_id or user.station_id or "MLG"
+    if user.is_station_master() and not user.can_access_station(target):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Station '{target}' is outside your authorized operational jurisdiction ({user.get_stations()}).",
+        )
     return station_master_kpis(
         db, simulation, target, punctuality_threshold_min=punctuality_threshold_min
     )
@@ -372,8 +519,8 @@ def station_analytics(
 @router.get("/{simulation_id}/analytics/section-controller")
 def section_analytics(
     db: Session = Depends(get_db),
+    user: User = Depends(require_roles("SECTION_MASTER")),
     simulation: Simulation = Depends(get_simulation),
-    user: User = Depends(get_current_user),
 ) -> dict:
     return section_controller_kpis(db, simulation)
 

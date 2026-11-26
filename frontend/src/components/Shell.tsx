@@ -19,6 +19,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   // Core Control Office Workspaces
   { to: "/", label: "Dashboard", icon: "◉", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Core Console" },
+  { to: "/station-master", label: "Station Yard Workspace", icon: "🚉", roles: ["STATION_MASTER"], group: "Core Console" },
+  { to: "/section-controller", label: "Section Control Console", icon: "🎛️", roles: ["SECTION_MASTER"], group: "Core Console" },
   { to: "/graph", label: "Master Control Graph", icon: "📈", roles: ["SECTION_MASTER"], group: "Core Console" },
   { to: "/stations", label: "Station Control", icon: "🏛", roles: ["SECTION_MASTER", "STATION_MASTER"], group: "Core Console" },
   { to: "/blocks", label: "Block Section Board", icon: "⏹", roles: ["SECTION_MASTER"], group: "Core Console" },
@@ -61,8 +63,34 @@ export function Shell() {
 
   if (!user) return null;
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(user.role));
-  const isSectionMaster = user.role === "SECTION_MASTER";
+  const isSectionMaster = user.role === "SECTION_MASTER" || user.role === "SECTION_CONTROLLER" || user.role === "ADMIN";
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    const allowed = new Set(item.roles);
+    if (allowed.has("SECTION_MASTER")) {
+      allowed.add("SECTION_CONTROLLER");
+      allowed.add("ADMIN");
+    }
+    return allowed.has(user.role);
+  });
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pwdMsg, setPwdMsg] = useState<{ text: string; error: boolean } | null>(null);
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwdMsg(null);
+    try {
+      const res = await api.changePassword(oldPassword, newPassword);
+      setPwdMsg({ text: res.message || "Password updated successfully.", error: false });
+      setOldPassword("");
+      setNewPassword("");
+      setTimeout(() => setShowPasswordModal(false), 1500);
+    } catch (err) {
+      setPwdMsg({ text: err instanceof Error ? err.message : "Password change failed", error: true });
+    }
+  }
 
   async function runControl(
     label: string,
@@ -116,27 +144,107 @@ export function Shell() {
         <div className="sidebar-footer">
           <div className="user-chip">
             <strong>{user.display_name}</strong>
-            <span>{user.role.replace("_", " ")}</span>
-            {user.station_id && <span>Scope: station {user.station_id}</span>}
+            <span className="mono small" style={{ color: "#38BDF8" }}>{user.role.replace("_", " ")}</span>
+            <span className="small text-muted">{user.zone || "SWR"} · {user.division || "Southern Div"}</span>
+            {user.station_id ? (
+              <span className="badge badge-accent small" style={{ marginTop: "4px" }}>
+                Scope: station {user.station_id}
+              </span>
+            ) : (
+              <span className="badge badge-default small" style={{ marginTop: "4px" }}>
+                Area: {user.control_area || "Full Corridor"}
+              </span>
+            )}
           </div>
-          <button
-            type="button"
-            className="button button-ghost full"
-            onClick={() => {
-              logout();
-              navigate("/");
-            }}
-          >
-            Sign out
-          </button>
+          <div className="flex-col gap-2" style={{ marginTop: "8px" }}>
+            <button
+              type="button"
+              className="button button-small button-ghost full"
+              onClick={() => setShowPasswordModal(true)}
+            >
+              Change Password
+            </button>
+            <button
+              type="button"
+              className="button button-small button-ghost full"
+              onClick={() => {
+                logout();
+                navigate("/login");
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
+
+      {/* Password Change Dialog */}
+      {showPasswordModal && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Change Password Modal">
+          <div className="modal-card" style={{ maxWidth: "420px", background: "#0F172A", border: "1px solid #1E293B", borderRadius: "8px", padding: "20px" }}>
+            <div className="flex-row justify-between items-center" style={{ marginBottom: "14px" }}>
+              <h3 style={{ margin: 0, color: "#F8FAFC" }}>Change Account Password</h3>
+              <button
+                type="button"
+                className="button button-small button-ghost"
+                onClick={() => setShowPasswordModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleChangePassword} className="stack" style={{ gap: "12px" }}>
+              <label className="field">
+                <span className="field-label" style={{ color: "#94A3B8" }}>Current Password</span>
+                <input
+                  type="password"
+                  className="input full"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label" style={{ color: "#94A3B8" }}>New Password</span>
+                <input
+                  type="password"
+                  className="input full"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </label>
+              {pwdMsg && (
+                <div className={`banner ${pwdMsg.error ? "banner-danger" : "banner-accent"}`}>
+                  {pwdMsg.text}
+                </div>
+              )}
+              <div className="flex-row justify-end gap-2" style={{ marginTop: "8px" }}>
+                <button
+                  type="button"
+                  className="button button-ghost"
+                  onClick={() => setShowPasswordModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="button button-primary">
+                  Update Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div className="main">
         <header className="topbar">
           <div className="env-indicator flex-row gap-2 items-center">
             <span className="badge badge-watch" title="Operating environment: Simulation mode with synthetic data">
               ● SIMULATION MODE
+            </span>
+            <span className="badge badge-default mono small" style={{ background: "#1E293B", color: "#38BDF8", border: "1px solid #334155" }}>
+              {user.control_area || (user.station_id ? `STATION ${user.station_id}` : "CORRIDOR")}
             </span>
           </div>
           <div className="simulation-picker">

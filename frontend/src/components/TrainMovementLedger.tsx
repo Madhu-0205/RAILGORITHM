@@ -174,6 +174,21 @@ export function TrainMovementLedger({
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Search trains in ledger"
           />
+
+          {(statusFilter !== "ALL" || categoryFilter !== "ALL" || searchQuery) && (
+            <button
+              type="button"
+              className="button button-small button-ghost"
+              onClick={() => {
+                setStatusFilter("ALL");
+                setCategoryFilter("ALL");
+                setSearchQuery("");
+              }}
+              title="Reset all filters"
+            >
+              ↺ Reset
+            </button>
+          )}
         </div>
       </div>
 

@@ -21,7 +21,9 @@ from .routers import (
     models_router,
     recommendations,
     scenarios,
+    section_controller,
     simulations,
+    station_master,
     system,
 )
 from .services.seed import seed_default_simulation, seed_users, sync_model_registry
@@ -93,6 +95,8 @@ for router in (
     auth.router,
     scenarios.router,
     simulations.router,
+    station_master.router,
+    section_controller.router,
     recommendations.router,
     audit.router,
     models_router.router,
@@ -103,6 +107,8 @@ for router in (
 
 
 @app.get("/api/v1/health")
+@app.get("/api/health")
+@app.get("/healthz")
 def health() -> dict:
     summary = metadata_summary()
     return {

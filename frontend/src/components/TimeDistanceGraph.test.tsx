@@ -222,4 +222,69 @@ describe("TimeDistanceGraph", () => {
     const centerBtn = screen.getByRole("button", { name: /Center Now ⏱/i });
     fireEvent.click(centerBtn);
   });
+
+  it("supports station filtering and train search input", () => {
+    render(
+      <TimeDistanceGraph
+        stations={mockStations}
+        sections={mockSections}
+        trains={mockTrains}
+        conflicts={mockConflicts}
+      />
+    );
+
+    // Station filter
+    const stationSelect = screen.getByRole("combobox", { name: /Filter by station/i });
+    fireEvent.change(stationSelect, { target: { value: "MLG" } });
+    expect(stationSelect).toHaveValue("MLG");
+
+    // Train search
+    const searchInput = screen.getByRole("textbox", { name: /Search specific train/i });
+    fireEvent.change(searchInput, { target: { value: "12625" } });
+    expect(searchInput).toHaveValue("12625");
+  });
+
+  it("supports time window duration and filter reset", () => {
+    render(
+      <TimeDistanceGraph
+        stations={mockStations}
+        sections={mockSections}
+        trains={mockTrains}
+        conflicts={mockConflicts}
+      />
+    );
+
+    // Click 6h duration
+    const btn6h = screen.getByRole("button", { name: "6h" });
+    fireEvent.click(btn6h);
+    expect(btn6h.className).toContain("button-primary");
+
+    // Click reset
+    const resetBtn = screen.getByRole("button", { name: /↺ Reset/i });
+    fireEvent.click(resetBtn);
+
+    // Default window duration (3h) restored
+    const btn3h = screen.getByRole("button", { name: "3h" });
+    expect(btn3h.className).toContain("button-primary");
+  });
+
+  it("toggles operational overlays panel and display flags", () => {
+    render(
+      <TimeDistanceGraph
+        stations={mockStations}
+        sections={mockSections}
+        trains={mockTrains}
+        conflicts={mockConflicts}
+      />
+    );
+
+    // Toggle overlays panel
+    const overlayToggle = screen.getByRole("button", { name: /Overlays/i });
+    fireEvent.click(overlayToggle);
+
+    // Checkboxes are displayed
+    expect(screen.getByText(/Speed Restrictions \(TSR\/PSR\)/i)).toBeDefined();
+    expect(screen.getByText(/Crossing Points/i)).toBeDefined();
+    expect(screen.getByText(/Station Dwell/i)).toBeDefined();
+  });
 });

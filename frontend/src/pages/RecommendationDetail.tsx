@@ -11,6 +11,7 @@ import {
   titleCase,
 } from "../lib/format";
 import {
+  DataProvenanceBadge,
   EmptyState,
   ErrorBanner,
   EvidenceBadge,
@@ -43,11 +44,9 @@ function labelFor(detail: RecommendationDetail, candidateId: string | null): str
 function OutcomeCells({ outcome }: { outcome?: CandidateOutcome }) {
   if (!outcome) {
     return (
-      <tr>
-        <td colSpan={5} className="muted">
-          Not available
-        </td>
-      </tr>
+      <td colSpan={5} className="muted">
+        Not available
+      </td>
     );
   }
   return (
@@ -73,6 +72,8 @@ export function RecommendationDetailPage() {
   const [rationale, setRationale] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [modificationText, setModificationText] = useState("");
+  const [feedbackCategory, setFeedbackCategory] = useState<string>("ACCEPTED");
+  const [structuredTag, setStructuredTag] = useState<string>("SCHEDULE_PRIORITY");
   const [busy, setBusy] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [decisionNote, setDecisionNote] = useState<string | null>(null);
@@ -81,6 +82,8 @@ export function RecommendationDetailPage() {
     setRationale("");
     setConfirm(false);
     setModificationText("");
+    setFeedbackCategory("ACCEPTED");
+    setStructuredTag("SCHEDULE_PRIORITY");
     setDecisionError(null);
     setDecisionNote(null);
   }, [recommendationId]);
@@ -122,6 +125,8 @@ export function RecommendationDetailPage() {
         rationale: rationale.trim(),
         confirm_apply: confirm,
         modifications,
+        feedback_category: feedbackCategory,
+        structured_rationale_tag: structuredTag,
       });
       setDecisionNote(result.note);
       await refresh();
@@ -159,6 +164,94 @@ export function RecommendationDetailPage() {
           <StatusBadge status={data.status} />
           {data.is_stale && <span className="badge badge-danger">STALE</span>}
           {data.disagreement && <span className="badge badge-watch">MODELS DISAGREE</span>}
+          {data.predictive_regulation?.decision_urgency?.urgency_category === "IMMEDIATE" && (
+            <span className="badge badge-danger">IMMEDIATE (&lt;5m)</span>
+          )}
+          {data.predictive_regulation?.decision_urgency?.urgency_category === "NEAR_TERM" && (
+            <span className="badge badge-watch">NEAR-TERM (5-15m)</span>
+          )}
+          {data.predictive_regulation?.decision_urgency?.urgency_category === "PLANNED" && (
+            <span className="badge badge-good">PLANNED REGULATION</span>
+          )}
+          {data.data_quality && (
+            <span className="badge badge-muted">DATA: {data.data_quality.overall_quality_state}</span>
+          )}
+          <span className="badge badge-watch">
+            {data.confidence_disclosure?.confidence_label ?? "Confidence: Not calibrated"}
+          </span>
+          <DataProvenanceBadge provenance="CALCULATED" />
+          <DataProvenanceBadge provenance="PREDICTED" />
+        </div>
+      </div>
+
+      {/* LEVEL 1: INCIDENT / CONFLICT OPERATIONAL SUMMARY */}
+      <div
+        className="incident-summary-card"
+        style={{
+          background: "linear-gradient(135deg, #0e1726 0%, #172554 100%)",
+          border: "1px solid #38bdf8",
+          borderRadius: "8px",
+          padding: "16px 20px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "1.2rem" }}>⚡</span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Operational Incident & Decision Context
+            </span>
+            {data.predictive_regulation?.decision_urgency && (
+              <span
+                style={{
+                  background:
+                    data.predictive_regulation.decision_urgency.urgency_category === "IMMEDIATE"
+                      ? "#ef4444"
+                      : "#f59e0b",
+                  color: "#080c14",
+                  fontWeight: 800,
+                  fontSize: "0.75rem",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                }}
+              >
+                ⏱ URGENCY: {data.predictive_regulation.decision_urgency.urgency_category}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#f8fafc" }}>
+            {data.explanation.headline || (recommended ? recommended.description : "Regulation Incident")}
+          </div>
+          <div style={{ fontSize: "0.85rem", color: "#94a3b8", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            <span>
+              Affected Stations: <strong style={{ color: "#f8fafc" }}>{data.affected_stations.join(" ⇄ ")}</strong>
+            </span>
+            <span>
+              Simulation Clock: <strong style={{ color: "#f8fafc" }}>{data.simulation_time} IST</strong> (State v{data.state_version})
+            </span>
+            {data.predictive_regulation?.decision_urgency?.time_to_act_min !== null && data.predictive_regulation?.decision_urgency?.time_to_act_min !== undefined && (
+              <span style={{ color: "#f87171", fontWeight: 700 }}>
+                Action Window: {data.predictive_regulation.decision_urgency.time_to_act_min}m remaining
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "0.75rem", color: "#94a3b8", textTransform: "uppercase" }}>Estimated Delay Savings</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#34d399" }}>
+              {data.predictive_regulation?.comparative_timeline?.net_delay_savings_min !== undefined
+                ? `+${data.predictive_regulation.comparative_timeline.net_delay_savings_min} min`
+                : outcome?.total_delay_min !== undefined
+                ? `-${outcome.total_delay_min} min`
+                : "Evaluated"}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -255,6 +348,163 @@ export function RecommendationDetailPage() {
         )}
       </Panel>
 
+      {data.predictive_regulation && (
+        <Panel
+          title="Predictive Train Regulation & Forward Impact"
+          subtitle="Multi-horizon projections, delay progression trends, and longitudinal comparative trajectory."
+        >
+          {data.predictive_regulation.decision_urgency && data.predictive_regulation.decision_urgency.action_required && (
+            <div className="banner banner-warning mb-4" role="status">
+              <strong>Decision Window: </strong>
+              {data.predictive_regulation.decision_urgency.decision_window_label}
+              {data.predictive_regulation.decision_urgency.time_to_act_min !== null && (
+                <span> — {data.predictive_regulation.decision_urgency.time_to_act_min} minutes remaining before conflict becomes unavoidable.</span>
+              )}
+            </div>
+          )}
+
+          {data.predictive_regulation.multi_horizon_projections && (
+            <div className="kpi-grid mb-4">
+              {data.predictive_regulation.multi_horizon_projections.map((h) => (
+                <div key={h.horizon_min} className="mini-kpi">
+                  <span>{h.horizon_min}m {h.horizon_label} ({h.target_time})</span>
+                  <strong>{h.actionable_conflicts} conflicts · {h.projected_total_delay_min}m delay</strong>
+                  <span className="muted small">{h.critical_conflicts} critical</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {data.predictive_regulation.knock_on_propagation && data.predictive_regulation.knock_on_propagation.affected_train_count > 0 && (
+            <div className="mb-4 p-3 bg-slate-900 border border-slate-700 rounded text-sm">
+              <strong className="text-amber-400">Downstream Knock-on Propagation: </strong>
+              If train {data.predictive_regulation.knock_on_propagation.delayed_train_id} is unmitigated, it will induce{" "}
+              <strong>{data.predictive_regulation.knock_on_propagation.total_knock_on_delay_min} min</strong> cumulative knock-on delay across{" "}
+              <strong>{data.predictive_regulation.knock_on_propagation.affected_train_count} downstream train(s)</strong>.
+              {data.predictive_regulation.knock_on_propagation.bottleneck_locations.length > 0 && (
+                <div className="text-xs text-slate-400 mt-1">
+                  Bottleneck resource(s): {data.predictive_regulation.knock_on_propagation.bottleneck_locations.join(", ")}
+                </div>
+              )}
+            </div>
+          )}
+
+          {data.predictive_regulation.comparative_timeline?.available && data.predictive_regulation.comparative_timeline.stations && (
+            <div>
+              <h4 className="font-semibold text-sm mb-2 text-slate-200">
+                Longitudinal Station Trajectory: {data.predictive_regulation.comparative_timeline.focus_train_name ?? "Focus Train"}
+                {data.predictive_regulation.comparative_timeline.net_delay_savings_min !== undefined && (
+                  <span className="ml-2 text-emerald-400 font-normal">
+                    (Net delay savings: {data.predictive_regulation.comparative_timeline.net_delay_savings_min} min)
+                  </span>
+                )}
+              </h4>
+              <div className="table-scroll">
+                <table className="table text-xs">
+                  <thead>
+                    <tr>
+                      <th>Station</th>
+                      <th>Scheduled</th>
+                      <th>No Action (Baseline)</th>
+                      <th>Recommended Action</th>
+                      <th>Alternative Action</th>
+                      <th>Savings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.predictive_regulation.comparative_timeline.stations.map((st) => (
+                      <tr key={st.station_id}>
+                        <td><strong>{st.station_id}</strong></td>
+                        <td>{st.scheduled_arrival}</td>
+                        <td className="text-rose-400">{st.no_action_arrival}</td>
+                        <td className="text-emerald-400 font-semibold">{st.recommended_arrival}</td>
+                        <td className="text-slate-400">{st.alternative_arrival ?? "—"}</td>
+                        <td>
+                          {st.delay_savings_min > 0 ? (
+                            <span className="badge badge-good">+{st.delay_savings_min}m</span>
+                          ) : (
+                            <span className="badge badge-muted">0m</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {data.explanation.structured_reasoning && (
+        <Panel
+          title="Explainable Recommendation Reasoning (10-Point Operational Assessment)"
+          subtitle="Formulated from formal solver artifacts, independent validator checks, and verified telemetry."
+        >
+          <div className="space-y-3 text-sm">
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-indigo-300">1. Operational Situation: </strong>
+              <span>{String(data.explanation.structured_reasoning["1_operational_situation"])}</span>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-amber-300">2. Primary Problem: </strong>
+              <span>{String(data.explanation.structured_reasoning["2_primary_problem"])}</span>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-emerald-300">3. Recommended Action: </strong>
+              <span>{String(data.explanation.structured_reasoning["3_recommended_action"])}</span>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-cyan-300">4. Operational Reasoning: </strong>
+              <span>{String(data.explanation.structured_reasoning["4_operational_reasoning"])}</span>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-purple-300">5. Railway Constraints Evaluated: </strong>
+              <div className="flex flex-wrap gap-2 mt-1.5">
+                {Array.isArray(data.explanation.structured_reasoning["5_railway_constraints_considered"]) &&
+                  data.explanation.structured_reasoning["5_railway_constraints_considered"].map((c: any, idx: number) => (
+                    <span key={idx} className="badge badge-good">
+                      ✓ {c.constraint_id}: {c.name} ({c.status})
+                    </span>
+                  ))}
+              </div>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-blue-300">6. Alternatives Evaluated: </strong>
+              <ul className="list-disc pl-5 mt-1 space-y-1">
+                {Array.isArray(data.explanation.structured_reasoning["6_alternative_options_evaluated"]) &&
+                  data.explanation.structured_reasoning["6_alternative_options_evaluated"].map((alt: any, idx: number) => (
+                    <li key={idx}>
+                      <strong>{alt.label}</strong> — <span className="badge badge-muted">{alt.status}</span>: {alt.reason_not_chosen}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-teal-300">7. Expected Consequences: </strong>
+              <span>{String(data.explanation.structured_reasoning["7_expected_consequences"])}</span>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-rose-300">8. Consequences of No Action: </strong>
+              <span>{String(data.explanation.structured_reasoning["8_consequences_of_no_action"])}</span>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-yellow-300">9. Verified Evidence: </strong>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {Array.isArray(data.explanation.structured_reasoning["9_verified_evidence"]) &&
+                  data.explanation.structured_reasoning["9_verified_evidence"].map((ev: any, idx: number) => (
+                    <span key={idx} className="badge badge-muted">{ev}</span>
+                  ))}
+              </div>
+            </div>
+            <div className="p-2.5 bg-slate-800/80 rounded border border-slate-700">
+              <strong className="text-orange-300">10. Residual Uncertainty: </strong>
+              <span>{String(data.explanation.structured_reasoning["10_residual_uncertainty"])}</span>
+            </div>
+          </div>
+        </Panel>
+      )}
+
       <div className="grid-two">
         <Panel title="Conflict evidence" subtitle="Projected from the current simulated state.">
           {data.conflicts.length === 0 ? (
@@ -305,6 +555,199 @@ export function RecommendationDetailPage() {
           <p className="muted small">{data.disagreement_detail.selection_rule}</p>
         </Panel>
       </div>
+
+      {data.predictive_regulation && (data.predictive_regulation.developing_delays || data.predictive_regulation.propagation_graph) && (
+        <Panel
+          title="Predictive Regulation & Delay Propagation Graph"
+          subtitle="Early detection of developing delays, headway dependencies, and cascade chains across the corridor."
+        >
+          {data.predictive_regulation.developing_delays && data.predictive_regulation.developing_delays.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <h4>Developing Corridor Delays</h4>
+              <table className="table compact">
+                <thead>
+                  <tr>
+                    <th>Train</th>
+                    <th>Category</th>
+                    <th>Severity</th>
+                    <th>Current</th>
+                    <th>Projected Range</th>
+                    <th>Primary Driver</th>
+                    <th>Location</th>
+                    <th>Actionability</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.predictive_regulation.developing_delays.map((d) => (
+                    <tr key={d.train_id}>
+                      <td><strong>{d.train_id}</strong> ({d.train_name})</td>
+                      <td><span className="badge badge-muted">{d.category}</span></td>
+                      <td>
+                        <span className={`badge ${d.severity === "CRITICAL" ? "badge-danger" : d.severity === "HIGH" ? "badge-watch" : "badge-good"}`}>
+                          {d.severity}
+                        </span>
+                      </td>
+                      <td>{d.current_delay_min} min</td>
+                      <td>{d.projected_delay_range.min_delay_min}–{d.projected_delay_range.max_delay_min} min</td>
+                      <td className="small">{d.primary_driver}</td>
+                      <td>{d.bottleneck_location}</td>
+                      <td>
+                        <span className={`badge ${d.actionability === "ACTIONABLE_NOW" ? "badge-danger" : "badge-muted"}`}>
+                          {d.actionability}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {data.predictive_regulation.propagation_graph?.cascade_chains && data.predictive_regulation.propagation_graph.cascade_chains.length > 0 && (
+            <div>
+              <h4>Delay Cascade Propagation Chains</h4>
+              <ul className="prose-list">
+                {data.predictive_regulation.propagation_graph.cascade_chains.map((chain, i) => (
+                  <li key={i}>
+                    <strong>Initiating Train {chain.initiating_train_id}:</strong> Chain length {chain.chain_length} trains,
+                    accumulating <strong>+{chain.total_accumulated_delay_min} min</strong> delay.
+                    Impacted: {chain.impacted_trains.join(" → ")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {data.structured_evidence && (
+        <Panel
+          title="Structured Operational Evidence (11-Part Schema)"
+          subtitle="Factual audit trail connecting field situation, constraint checks, and regulation trade-offs."
+        >
+          <div className="qa-list">
+            {Object.entries(data.structured_evidence).map(([secKey, section]: [string, any]) => (
+              <details key={secKey} open={["A_situation", "B_detection", "E_recommended_action", "F_expected_outcome"].includes(secKey)}>
+                <summary style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>{section.title || titleCase(secKey)}</span>
+                  {section.evidence_class && (
+                    <span className="badge badge-muted" style={{ fontSize: "0.75rem" }}>
+                      {section.evidence_class}
+                    </span>
+                  )}
+                </summary>
+                <div style={{ paddingTop: "8px" }}>
+                  {section.content && <p>{section.content}</p>}
+                  {secKey === "A_situation" && (
+                    <div className="mini-kpi-row" style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                      <span className="badge badge-good">Posture: {section.operational_posture}</span>
+                      <span className="badge badge-muted">Active Trains: {section.active_trains_count}</span>
+                      <span className="badge badge-watch">{section.corridor_state}</span>
+                    </div>
+                  )}
+                  {secKey === "C_evidence" && section.items && (
+                    <table className="table compact" style={{ marginTop: "8px" }}>
+                      <thead>
+                        <tr>
+                          <th>Fact</th>
+                          <th>Category</th>
+                          <th>Source</th>
+                          <th>Class</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.items.map((item: any) => (
+                          <tr key={item.id}>
+                            <td>{item.fact}</td>
+                            <td>{item.category}</td>
+                            <td>{item.source}</td>
+                            <td><span className="badge badge-muted">{item.evidence_class}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {secKey === "D_constraints" && (
+                    <div style={{ marginTop: "6px" }}>
+                      <h5>Hard Safety Constraints Checked</h5>
+                      <ul className="prose-list">
+                        {(section.hard_constraints_checked || []).map((hc: any) => (
+                          <li key={hc.id}>
+                            <strong>{hc.id}</strong>: {hc.description} — <span className="badge badge-good">{hc.status}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {secKey === "I_trade_offs" && (
+                    <div className="grid-two" style={{ marginTop: "6px" }}>
+                      <div>
+                        <strong className="text-good">Gained Benefits:</strong>
+                        <ul className="prose-list">
+                          {(section.gained || []).map((g: string, i: number) => (
+                            <li key={i}>{g}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <strong className="text-danger">Sacrifices / Incurred Holds:</strong>
+                        <ul className="prose-list">
+                          {(section.sacrificed || []).map((s: string, i: number) => (
+                            <li key={i}>{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                  {secKey === "K_validity" && (
+                    <div style={{ marginTop: "6px" }}>
+                      <p><strong>Valid Until Sim Time:</strong> {section.valid_until_sim_time} (State v{section.state_version})</p>
+                      <strong>Revalidation Triggers:</strong>
+                      <ul className="prose-list">
+                        {(section.revalidation_triggers || []).map((trig: string, i: number) => (
+                          <li key={i}>{trig}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      {data.comparison_matrix && data.comparison_matrix.length > 0 && (
+        <Panel
+          title="Multi-Alternative Regulation Comparison Matrix"
+          subtitle="Direct operational evaluation: Recommended Action vs Feasible Alternative vs No-Action Baseline."
+        >
+          <div className="table-scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Operational Attribute</th>
+                  <th>Recommended Action</th>
+                  <th>Best Alternative</th>
+                  <th>No-Action Baseline</th>
+                  <th>Operational Significance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.comparison_matrix.map((row, idx) => (
+                  <tr key={idx}>
+                    <td><strong>{row.attribute}</strong></td>
+                    <td className="row-selected"><strong>{String(row.recommended)}</strong></td>
+                    <td>{String(row.best_alternative)}</td>
+                    <td className="muted">{String(row.no_action_baseline)}</td>
+                    <td className="small">{row.operational_significance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
 
       <Panel
         title="Why this recommendation?"
@@ -492,10 +935,47 @@ export function RecommendationDetailPage() {
               <dd>{numberOrDash(data.optimizer.objective_value, 1)}</dd>
             </div>
             <div>
+              <dt>Optimality gap</dt>
+              <dd>{String(data.optimizer.optimality_gap_pct ?? "0.0%")}</dd>
+            </div>
+            <div>
               <dt>Solve time</dt>
               <dd>{numberOrDash(data.optimizer.solve_time_s, 3)} s</dd>
             </div>
           </dl>
+          {Boolean(data.optimizer.objective_breakdown) && (
+            <div style={{ marginTop: "8px" }}>
+              <span className="field-label">Objective breakdown</span>
+              <table className="table compact">
+                <tbody>
+                  <tr>
+                    <td>Final delay penalty</td>
+                    <td>{String((data.optimizer.objective_breakdown as any)?.final_delay_penalty ?? "—")}</td>
+                  </tr>
+                  <tr>
+                    <td>Hold penalty</td>
+                    <td>{String((data.optimizer.objective_breakdown as any)?.hold_penalty ?? "—")}</td>
+                  </tr>
+                  <tr>
+                    <td>Total objective</td>
+                    <td><strong>{String((data.optimizer.objective_breakdown as any)?.total_objective ?? "—")}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+          {Array.isArray(data.optimizer.binding_constraints) && data.optimizer.binding_constraints.length > 0 && (
+            <div style={{ marginTop: "8px" }}>
+              <span className="field-label">Binding constraints</span>
+              <ul className="prose-list">
+                {data.optimizer.binding_constraints.map((bc: any, idx: number) => (
+                  <li key={idx} className="small">
+                    <strong>{bc.type}</strong> at {bc.location}: {bc.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <p className="muted small">{data.optimizer.message}</p>
           <h4>Baseline ordering</h4>
           <ol className="prose-list">
@@ -564,6 +1044,25 @@ export function RecommendationDetailPage() {
                 <dd>{data.decision.applied ? "Yes — to synthetic simulation" : "No"}</dd>
               </div>
               <div>
+                <dt>Feedback category</dt>
+                <dd><span className="badge badge-good">{data.decision.feedback_category ?? "ACCEPTED"}</span></dd>
+              </div>
+              {data.decision.structured_rationale_tag && (
+                <div>
+                  <dt>Operational rationale tag</dt>
+                  <dd><span className="badge badge-muted">{data.decision.structured_rationale_tag}</span></dd>
+                </div>
+              )}
+              {data.decision.prediction_error && (
+                <div>
+                  <dt>Outcome accuracy</dt>
+                  <dd>
+                    Delay error: {data.decision.prediction_error.delay_error_min !== null ? `${data.decision.prediction_error.delay_error_min} min` : "—"} ·{" "}
+                    Resolution success: {data.decision.prediction_error.resolution_success ? "Achieved" : "Unresolved"}
+                  </dd>
+                </div>
+              )}
+              <div>
                 <dt>Execution mode</dt>
                 <dd>{data.decision.execution_mode}</dd>
               </div>
@@ -586,9 +1085,84 @@ export function RecommendationDetailPage() {
                 </pre>
               </details>
             )}
+            {Boolean(data.decision.three_way_comparison) && (
+              <div style={{ marginTop: "14px", borderTop: "1px solid var(--border)", paddingTop: "10px" }}>
+                <h4>3-Way Outcome Evaluation (AI vs Human vs Observed)</h4>
+                <table className="table compact">
+                  <thead>
+                    <tr>
+                      <th>Evaluated Dimension</th>
+                      <th>AI Recommended</th>
+                      <th>Human Selected</th>
+                      <th>Observed Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Action</td>
+                      <td>{String((data.decision.three_way_comparison as any)?.ai_recommended_action?.type || "—")}</td>
+                      <td>{String((data.decision.three_way_comparison as any)?.human_selected_action?.type || data.decision.action)}</td>
+                      <td><span className="badge badge-good">OBSERVED</span></td>
+                    </tr>
+                    <tr>
+                      <td>Total Delay</td>
+                      <td>{numberOrDash((data.decision.three_way_comparison as any)?.ai_predicted_outcome?.total_delay_min)} min</td>
+                      <td>{numberOrDash((data.decision.actual_outcome as any)?.total_delay_min)} min</td>
+                      <td>{numberOrDash((data.decision.three_way_comparison as any)?.observed_actual_outcome?.total_delay_min)} min</td>
+                    </tr>
+                    <tr>
+                      <td>Relative Evaluation</td>
+                      <td colSpan={3}>
+                        <span className="badge badge-watch">
+                          {String((data.decision.three_way_comparison as any)?.comparison_metrics?.relative_performance || "MATCHED")}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           <>
+            <div className="grid-two mb-3">
+              <div className="field">
+                <label className="field-label" htmlFor="feedback-cat">
+                  Feedback category
+                </label>
+                <select
+                  id="feedback-cat"
+                  value={feedbackCategory}
+                  onChange={(e) => setFeedbackCategory(e.target.value)}
+                  className="input"
+                >
+                  <option value="ACCEPTED">ACCEPTED (Follow recommendation)</option>
+                  <option value="MODIFIED">MODIFIED (Adjusted parameters)</option>
+                  <option value="REJECTED">REJECTED (Controller override)</option>
+                  <option value="NOT_APPLICABLE">NOT_APPLICABLE (Situation changed)</option>
+                  <option value="SUPERSEDED">SUPERSEDED (Alternative requested)</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="rationale-tag">
+                  Operational rationale tag
+                </label>
+                <select
+                  id="rationale-tag"
+                  value={structuredTag}
+                  onChange={(e) => setStructuredTag(e.target.value)}
+                  className="input"
+                >
+                  <option value="SCHEDULE_PRIORITY">SCHEDULE_PRIORITY (Standard punctuality)</option>
+                  <option value="CREW_DUTY_EXCEEDED">CREW_DUTY_EXCEEDED (Hours of Employment Regulation)</option>
+                  <option value="PLATFORM_MAINTENANCE">PLATFORM_MAINTENANCE (Track/platform block)</option>
+                  <option value="PASSENGER_CONNECTION">PASSENGER_CONNECTION (Branchline/express link)</option>
+                  <option value="STATION_REQUEST">STATION_REQUEST (Station Master coordination)</option>
+                  <option value="OTHER">OTHER (Special operational circumstances)</option>
+                </select>
+              </div>
+            </div>
+
             <div className="field">
               <label className="field-label" htmlFor="rationale">
                 Decision rationale (required)

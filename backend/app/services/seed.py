@@ -16,23 +16,156 @@ from ..security import hash_password
 from .audit import append_audit
 
 DEMO_USERS = [
+    # Station Masters (Individual station jurisdiction)
+    {
+        "username": "SM_NDL_001",
+        "password": "Station@123",
+        "role": "STATION_MASTER",
+        "display_name": "Station Master — Nandpur (NDL)",
+        "station_id": "NDL",
+        "section_id": "S1",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "NORTHERN_CONTROL_AREA",
+        "assigned_stations": ["NDL"],
+        "assigned_sections": ["S1"],
+    },
+    {
+        "username": "SM_KRN_001",
+        "password": "Station@123",
+        "role": "STATION_MASTER",
+        "display_name": "Station Master — Karanpur (KRN)",
+        "station_id": "KRN",
+        "section_id": "S1",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "NORTHERN_CONTROL_AREA",
+        "assigned_stations": ["KRN"],
+        "assigned_sections": ["S1", "S2"],
+    },
+    {
+        "username": "SM_MLG_001",
+        "password": "Station@123",
+        "role": "STATION_MASTER",
+        "display_name": "Station Master — Malgaon Junction (MLG)",
+        "station_id": "MLG",
+        "section_id": "S2",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "CORRIDOR",
+        "assigned_stations": ["MLG"],
+        "assigned_sections": ["S2", "S3"],
+    },
+    {
+        "username": "SM_SRP_001",
+        "password": "Station@123",
+        "role": "STATION_MASTER",
+        "display_name": "Station Master — Suryapur (SRP)",
+        "station_id": "SRP",
+        "section_id": "S3",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "SOUTHERN_CONTROL_AREA",
+        "assigned_stations": ["SRP"],
+        "assigned_sections": ["S3", "S4"],
+    },
+    {
+        "username": "SM_VSN_001",
+        "password": "Station@123",
+        "role": "STATION_MASTER",
+        "display_name": "Station Master — Vasanthpur (VSN)",
+        "station_id": "VSN",
+        "section_id": "S4",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "SOUTHERN_CONTROL_AREA",
+        "assigned_stations": ["VSN"],
+        "assigned_sections": ["S4"],
+    },
+    # Section Controllers (Area and corridor jurisdiction)
+    {
+        "username": "SC_NORTH_001",
+        "password": "Section@123",
+        "role": "SECTION_CONTROLLER",
+        "display_name": "Section Controller — Northern Area (NDL-MLG)",
+        "station_id": None,
+        "section_id": "S1",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "NORTHERN_CONTROL_AREA",
+        "assigned_stations": ["NDL", "KRN", "MLG"],
+        "assigned_sections": ["S1", "S2"],
+    },
+    {
+        "username": "SC_SOUTH_001",
+        "password": "Section@123",
+        "role": "SECTION_CONTROLLER",
+        "display_name": "Section Controller — Southern Area (MLG-VSN)",
+        "station_id": None,
+        "section_id": "S3",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "SOUTHERN_CONTROL_AREA",
+        "assigned_stations": ["MLG", "SRP", "VSN"],
+        "assigned_sections": ["S3", "S4"],
+    },
+    {
+        "username": "SC_CORRIDOR_001",
+        "password": "Section@123",
+        "role": "SECTION_CONTROLLER",
+        "display_name": "Chief Controller — Full Corridor (NDL-VSN)",
+        "station_id": None,
+        "section_id": "ALL",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "CORRIDOR",
+        "assigned_stations": ["NDL", "KRN", "MLG", "SRP", "VSN"],
+        "assigned_sections": ["S1", "S2", "S3", "S4"],
+    },
+    # Administrator (System & User Management)
+    {
+        "username": "ADMIN_001",
+        "password": "Admin@123",
+        "role": "ADMIN",
+        "display_name": "System Security Administrator",
+        "station_id": None,
+        "section_id": "ALL",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "CORRIDOR",
+        "assigned_stations": ["NDL", "KRN", "MLG", "SRP", "VSN"],
+        "assigned_sections": ["S1", "S2", "S3", "S4"],
+    },
+    # Legacy Demo Accounts (Kept for automated backwards compatibility)
     {
         "username": "section.master",
         "password": "Section@123",
         "role": "SECTION_MASTER",
-        "display_name": "Section Master — Northern Section",
+        "display_name": "Section Master — Northern Section (Demo)",
         "station_id": None,
         "section_id": "north-section",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "CORRIDOR",
+        "assigned_stations": ["NDL", "KRN", "MLG", "SRP", "VSN"],
+        "assigned_sections": ["S1", "S2", "S3", "S4"],
     },
     {
         "username": "station.master",
         "password": "Station@123",
         "role": "STATION_MASTER",
-        "display_name": "Station Master — Malgaon Junction",
+        "display_name": "Station Master — Malgaon Junction (Demo)",
         "station_id": "MLG",
         "section_id": "north-section",
+        "zone": "SWR",
+        "division": "Southern Division",
+        "control_area": "CORRIDOR",
+        "assigned_stations": ["MLG"],
+        "assigned_sections": ["S2", "S3"],
     },
 ]
+
+DEMO_USERNAMES: set[str] = {u["username"] for u in DEMO_USERS}
 
 
 def _bootstrap_users() -> list[dict]:
@@ -50,19 +183,24 @@ def _bootstrap_users() -> list[dict]:
         {
             "username": username,
             "password": password,
-            "role": os.getenv("RAILGORITHM_BOOTSTRAP_ROLE", "SECTION_MASTER"),
+            "role": os.getenv("RAILGORITHM_BOOTSTRAP_ROLE", "SECTION_CONTROLLER"),
             "display_name": os.getenv(
                 "RAILGORITHM_BOOTSTRAP_DISPLAY_NAME", "Bootstrap Controller"
             ),
             "station_id": os.getenv("RAILGORITHM_BOOTSTRAP_STATION_ID") or None,
             "section_id": os.getenv("RAILGORITHM_BOOTSTRAP_SECTION_ID") or None,
+            "zone": os.getenv("RAILGORITHM_BOOTSTRAP_ZONE") or "SWR",
+            "division": os.getenv("RAILGORITHM_BOOTSTRAP_DIVISION") or "Southern Division",
+            "control_area": os.getenv("RAILGORITHM_BOOTSTRAP_CONTROL_AREA") or "CORRIDOR",
+            "assigned_stations": ["NDL", "KRN", "MLG", "SRP", "VSN"],
+            "assigned_sections": ["S1", "S2", "S3", "S4"],
         }
     ]
 
 
 def seed_users(db: Session) -> None:
     entries = []
-    if settings.allow_demo_credentials:
+    if settings.allow_demo_credentials and not settings.is_production:
         entries.extend(DEMO_USERS)
     entries.extend(_bootstrap_users())
     for entry in entries:
@@ -70,6 +208,17 @@ def seed_users(db: Session) -> None:
             select(User).where(User.username == entry["username"])
         ).scalar_one_or_none()
         if existing:
+            # Update missing jurisdiction fields if necessary
+            if entry.get("assigned_stations") and not existing.assigned_stations:
+                existing.assigned_stations = entry["assigned_stations"]
+            if entry.get("assigned_sections") and not existing.assigned_sections:
+                existing.assigned_sections = entry["assigned_sections"]
+            if entry.get("control_area") and not existing.control_area:
+                existing.control_area = entry["control_area"]
+            if entry.get("zone") and not existing.zone:
+                existing.zone = entry["zone"]
+            if entry.get("division") and not existing.division:
+                existing.division = entry["division"]
             continue
         db.add(
             User(
@@ -77,8 +226,13 @@ def seed_users(db: Session) -> None:
                 password_hash=hash_password(entry["password"]),
                 role=entry["role"],
                 display_name=entry["display_name"],
-                station_id=entry["station_id"],
-                section_id=entry["section_id"],
+                station_id=entry.get("station_id"),
+                section_id=entry.get("section_id"),
+                zone=entry.get("zone"),
+                division=entry.get("division"),
+                control_area=entry.get("control_area"),
+                assigned_stations=entry.get("assigned_stations"),
+                assigned_sections=entry.get("assigned_sections"),
             )
         )
     db.commit()

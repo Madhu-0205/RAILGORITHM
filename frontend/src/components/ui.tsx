@@ -91,11 +91,77 @@ export function KpiCard({
 }
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  return <span className={severityClass(severity)}>{severity}</span>;
+  const norm = severity.toUpperCase();
+  const icon =
+    norm === "CRITICAL"
+      ? "■ "
+      : norm === "HIGH" || norm === "MAJOR"
+      ? "▲ "
+      : norm === "MEDIUM" || norm === "MODERATE"
+      ? "▲ "
+      : "● ";
+  return (
+    <span className={severityClass(severity)} data-severity={severity}>
+      <span aria-hidden="true" style={{ marginRight: "3px", fontWeight: 700 }}>{icon}</span>
+      {severity}
+    </span>
+  );
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={statusClass(status)}>{status.replace(/_/g, " ")}</span>;
+  const norm = status.toUpperCase();
+  const icon =
+    norm.includes("CLEAR") || norm.includes("NORMAL") || norm.includes("RUNNING") || norm.includes("APPROVED")
+      ? "● "
+      : norm.includes("DELAY") || norm.includes("CAUTION") || norm.includes("CONGEST") || norm.includes("REGULAT") || norm.includes("PAUSED")
+      ? "▲ "
+      : norm.includes("CRIT") || norm.includes("OCCUPIED") || norm.includes("BLOCK") || norm.includes("DEGRAD") || norm.includes("REJECT")
+      ? "■ "
+      : "◆ ";
+  return (
+    <span className={statusClass(status)} data-status={status}>
+      <span aria-hidden="true" style={{ marginRight: "3px", fontWeight: 700 }}>{icon}</span>
+      {status.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+export function DataProvenanceBadge({
+  provenance,
+  freshnessSeconds,
+}: {
+  provenance: "TELEMETRY" | "CALCULATED" | "PREDICTED" | "HEURISTIC" | "SYNTHETIC" | "NO_DATA";
+  freshnessSeconds?: number;
+}) {
+  const config = {
+    TELEMETRY: { label: "TELEMETRY", tone: "good", icon: "📡" },
+    CALCULATED: { label: "OPTIMIZER (CP-SAT)", tone: "accent", icon: "⚙" },
+    PREDICTED: { label: "PREDICTED (PPO)", tone: "accent", icon: "🧠" },
+    HEURISTIC: { label: "HEURISTIC", tone: "watch", icon: "⚖" },
+    SYNTHETIC: { label: "SYNTHETIC DATA", tone: "watch", icon: "🧪" },
+    NO_DATA: { label: "NO_DATA", tone: "muted", icon: "◌" },
+  }[provenance] || { label: provenance, tone: "muted", icon: "●" };
+
+  return (
+    <span
+      className={`badge badge-${config.tone}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px",
+        fontFamily: "var(--mono)",
+        fontSize: "0.68rem",
+        padding: "2px 6px",
+      }}
+      title={`Data provenance classification: ${provenance}`}
+    >
+      <span aria-hidden="true">{config.icon}</span>
+      <strong>{config.label}</strong>
+      {freshnessSeconds !== undefined && (
+        <span style={{ opacity: 0.8, marginLeft: "2px" }}>({freshnessSeconds}s ago)</span>
+      )}
+    </span>
+  );
 }
 
 export function Badge({

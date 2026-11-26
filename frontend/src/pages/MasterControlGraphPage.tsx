@@ -63,10 +63,6 @@ const DEFAULT_SECTIONS: Section[] = [
 
 export function MasterControlGraphPage() {
   const { selectedId, revision } = useSimulation();
-
-  const [directionFilter, setDirectionFilter] = useState<"ALL" | "UP" | "DOWN">("ALL");
-  const [typeFilter, setTypeFilter] = useState<string>("ALL");
-  const [showConflicts, setShowConflicts] = useState(true);
   const [selectedTrainId, setSelectedTrainId] = useState<string | null>(null);
 
   const { data, error, loading, reload } = useAsync(
@@ -82,20 +78,7 @@ export function MasterControlGraphPage() {
   const corridorStations = networkData?.network.stations || DEFAULT_STATIONS;
   const corridorSections = networkData?.network.sections || DEFAULT_SECTIONS;
   const rawTrains = data?.trains || [];
-  const corridorConflicts = showConflicts ? (data?.conflicts || []) : [];
-
-  const filteredTrains = useMemo(() => {
-    return rawTrains.filter((t) => {
-      if (directionFilter !== "ALL" && t.direction !== directionFilter) return false;
-      if (typeFilter !== "ALL" && t.train_type !== typeFilter) return false;
-      return true;
-    });
-  }, [rawTrains, directionFilter, typeFilter]);
-
-  const trainTypes = useMemo(() => {
-    const set = new Set(rawTrains.map((t) => t.train_type));
-    return Array.from(set);
-  }, [rawTrains]);
+  const corridorConflicts = data?.conflicts || [];
 
   if (!selectedId) {
     return (
@@ -131,75 +114,7 @@ export function MasterControlGraphPage() {
         </div>
       </div>
 
-      {/* Interactive Graph Control Toolbar */}
-      <div
-        className="flex-row justify-between items-center"
-        style={{
-          background: "#1E293B",
-          color: "#F8FAFC",
-          padding: "10px 16px",
-          borderRadius: "8px",
-          gap: "12px",
-          flexWrap: "wrap",
-        }}
-      >
-        <div className="flex-row items-center gap-3">
-          <span style={{ fontSize: "0.80rem", fontWeight: 700, color: "#38BDF8", textTransform: "uppercase" }}>
-            Movement Filters:
-          </span>
-          <div className="button-group">
-            <button
-              type="button"
-              className={`button button-small ${directionFilter === "ALL" ? "button-primary" : "button-ghost"}`}
-              onClick={() => setDirectionFilter("ALL")}
-            >
-              All Directions ({rawTrains.length})
-            </button>
-            <button
-              type="button"
-              className={`button button-small ${directionFilter === "UP" ? "button-primary" : "button-ghost"}`}
-              onClick={() => setDirectionFilter("UP")}
-            >
-              UP Direction ({rawTrains.filter((t) => t.direction === "UP").length})
-            </button>
-            <button
-              type="button"
-              className={`button button-small ${directionFilter === "DOWN" ? "button-primary" : "button-ghost"}`}
-              onClick={() => setDirectionFilter("DOWN")}
-            >
-              DOWN Direction ({rawTrains.filter((t) => t.direction === "DOWN").length})
-            </button>
-          </div>
-
-          <select
-            className="select-small"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ background: "#0F172A", color: "#F1F5F9", border: "1px solid #334155" }}
-            aria-label="Filter by train class"
-          >
-            <option value="ALL">All Train Classes</option>
-            {trainTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex-row items-center gap-3">
-          <label className="flex-row items-center gap-2" style={{ cursor: "pointer", fontSize: "0.82rem" }}>
-            <input
-              type="checkbox"
-              checked={showConflicts}
-              onChange={(e) => setShowConflicts(e.target.checked)}
-            />
-            <span>Highlight Conflict Intersections ({data.conflicts.length})</span>
-          </label>
-        </div>
-      </div>
-
-      {/* Main Full-Viewport String Chart */}
+      {/* Main Full-Viewport String Chart with Redesigned High-Contrast Filter Toolbar */}
       <Panel
         title="Time-Distance Trajectory Workspace"
         subtitle="Upward sloping lines = UP trains (NDL → VSN). Downward sloping lines = DOWN trains (VSN → NDL). Flat horizontal segments = Station dwell / loop wait."
@@ -207,10 +122,13 @@ export function MasterControlGraphPage() {
         <TimeDistanceGraph
           stations={corridorStations}
           sections={corridorSections}
-          trains={filteredTrains}
+          trains={rawTrains}
           conflicts={corridorConflicts}
           simTimeMin={data.simulation.sim_time_min}
           simTimeString={data.simulation.sim_time}
+          onSelectTrain={setSelectedTrainId}
+          selectedTrainId={selectedTrainId || undefined}
+          onRefresh={reload}
         />
       </Panel>
 
@@ -234,10 +152,10 @@ export function MasterControlGraphPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredTrains.map((t) => (
+              {rawTrains.map((t) => (
                 <tr
                   key={t.id}
-                  style={selectedTrainId === t.id ? { background: "#EFF6FF" } : undefined}
+                  style={selectedTrainId === t.id ? { background: "var(--panel-strong)" } : undefined}
                 >
                   <td>
                     <strong>{t.name}</strong>

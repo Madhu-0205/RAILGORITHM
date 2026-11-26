@@ -350,6 +350,16 @@ def optimise(
     solve_time = round(time.perf_counter() - started, 3)
 
     if status_name not in {"OPTIMAL", "FEASIBLE"}:
+        infeasibility_reasons = []
+        for station in network.stations:
+            cap = _available_capacity_min(state, station.id, now, horizon_min + 180)
+            if cap <= 0:
+                infeasibility_reasons.append(f"Station {station.id} has 0 available platforms due to outages.")
+        for train in active_trains:
+            for closure in state.get("block_closures", []):
+                if any(seg.get("block_id") == closure.get("block_id") for seg in train.get("schedule", [])):
+                    infeasibility_reasons.append(f"Train {train['id']} route blocked by closure on {closure.get('block_id')}.")
+
         message = (
             "No feasible schedule was found for the configured constraints. "
             "The system does not fabricate a feasible alternative."
@@ -370,6 +380,10 @@ def optimise(
             "precedence": [],
             "message": message,
             "action": None,
+            "objective_breakdown": None,
+            "optimality_gap_pct": None,
+            "binding_constraints": [],
+            "infeasibility_reasons": infeasibility_reasons or ["Conflict between simultaneous block occupancy and headway constraints."],
         }
 
     trains_payload: dict[str, dict] = {}
@@ -436,14 +450,40 @@ def optimise(
         if len(ordered) > 1:
             precedence.append({"block_id": block_id, "order": ordered})
 
+    obj_val = float(solver.ObjectiveValue())
+    obj_bound = float(solver.BestObjectiveBound())
+    optimality_gap_pct = 0.0 if status_name == "OPTIMAL" else round(abs(obj_val - obj_bound) / max(1.0, obj_val) * 100.0, 2)
+
+    delay_cost = sum(trains_payload[t]["weighted_delay"] * int(weights.get("final_delay", 10)) for t in trains_payload)
+    hold_cost = sum(trains_payload[t]["hold_min"] * int(weights.get("hold", 3)) for t in trains_payload)
+    deviation_cost = max(0.0, obj_val - delay_cost - hold_cost)
+
+    binding_constraints = []
+    for station_id in station_intervals:
+        cap = _available_capacity_min(state, station_id, now, horizon_min + 180)
+        binding_constraints.append({
+            "resource": f"Station {station_id} Platforms",
+            "capacity": cap,
+            "type": "PLATFORM_CAPACITY",
+            "is_critical": cap <= 1,
+        })
+
     schedule = {
         "status": status_name,
         "optimizer_version": OPTIMIZER_VERSION,
         # ObjectiveValue() is the value of the returned solution for both
         # OPTIMAL and FEASIBLE. BestObjectiveBound() is a bound, not the
         # achieved objective, and must not be reported as the objective.
-        "objective_value": float(solver.ObjectiveValue()),
-        "objective_bound": float(solver.BestObjectiveBound()),
+        "objective_value": obj_val,
+        "objective_bound": obj_bound,
+        "optimality_gap_pct": optimality_gap_pct,
+        "objective_breakdown": {
+            "final_delay_penalty": delay_cost,
+            "hold_penalty": hold_cost,
+            "schedule_deviation_penalty": round(deviation_cost, 2),
+            "total_objective": obj_val,
+        },
+        "binding_constraints": binding_constraints,
         "is_optimal": status_name == "OPTIMAL",
         "objective_profile": profile,
         "objective_weights": weights,
@@ -451,7 +491,7 @@ def optimise(
         "horizon_min": horizon_min,
         "trains": trains_payload,
         "precedence": precedence,
-        "message": "Feasible schedule returned by CP-SAT.",
+        "message": f"Feasible schedule returned by CP-SAT ({status_name}, solve duration: {round(solve_time * 1000, 1)}ms).",
         "solver": {
             "name": "Google OR-Tools CP-SAT",
             "version": getattr(__import__("ortools"), "__version__", "unknown"),
@@ -459,6 +499,7 @@ def optimise(
             "wall_time_s": solver.WallTime(),
             "branches": solver.NumBranches(),
             "conflicts": solver.NumConflicts(),
+            "optimality_gap_pct": optimality_gap_pct,
         },
     }
 

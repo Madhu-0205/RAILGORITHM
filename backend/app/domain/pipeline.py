@@ -24,9 +24,19 @@ from .candidates import (
     generate_candidates,
 )
 from .conflicts import detect_conflicts, primary_conflicts
+from .data_quality import evaluate_data_quality, get_confidence_disclosure
 from .explanation import build_explanation
 from .optimizer import OPTIMIZER_VERSION, optimise
 from .ppo import PPOAgent
+from .projection import (
+    build_delay_propagation_graph,
+    classify_delay_trend,
+    compute_comparative_timeline,
+    compute_decision_urgency,
+    compute_knock_on_propagation,
+    compute_multi_horizon_projections,
+    detect_developing_delays,
+)
 from .spec import (
     ASSUMPTION_SPEC_VERSION,
     CONSTRAINT_SPEC_VERSION,
@@ -320,6 +330,7 @@ def generate_recommendation(
     }
     problems = validate_state_integrity(state)
     feed_health = feed_manager.get_feed_health("FEED-SIGNAL-01")
+    data_quality = evaluate_data_quality(state, feed_health)
     data_freshness = {
         "feed_id": feed_health.feed_id,
         "feed_status": feed_health.status,
@@ -328,28 +339,38 @@ def generate_recommendation(
         "stale_data_warning": bool(feed_health.is_stale or feed_health.status in {"STALE", "OFFLINE"}),
         "data_label": "SYNTHETIC_DATA_TESTBED",
     }
-    if problems:
+    if problems or not data_quality["is_eligible_for_recommendations"]:
+        quality_issues = problems + data_quality["issues"]
+        overall_q = data_quality.get("overall_quality_state") or INCOMPLETE_DATA
+        gate_status_map = {
+            "STALE": "STALE_DATA_WITHHELD",
+            "CONTRADICTORY": "CONTRADICTORY_DATA_REFUSED",
+            "OFFLINE": "TELEMETRY_OFFLINE_GATED",
+            "INCOMPLETE": "INCOMPLETE_DATA",
+        }
+        evidence_st = gate_status_map.get(overall_q, overall_q)
         return {
             **base,
-            "evidence_status": INCOMPLETE_DATA,
+            "evidence_status": evidence_st,
             "data_freshness": data_freshness,
+            "data_quality": data_quality,
             "conflicts": [],
             "recommended": None,
             "alternatives": [],
-            "optimizer": {"status": "NOT_RUN", "message": "Incomplete simulation state."},
-            "ppo": {"available": False, "reason": "Pipeline stopped on incomplete data."},
+            "optimizer": {"status": "NOT_RUN", "message": f"Pipeline stopped: data quality state is {evidence_st}."},
+            "ppo": {"available": False, "reason": "Pipeline stopped on data quality eligibility gate."},
             "disagreement": False,
-            "data_issues": problems,
+            "data_issues": quality_issues,
             "explanation": build_explanation(
                 state=state,
                 conflicts=[],
                 recommended=None,
                 alternatives=[],
-                optimizer={"status": "NOT_RUN", "message": "Incomplete simulation state."},
-                ppo={"available": False, "reason": "Pipeline stopped on incomplete data."},
-                evidence_status=INCOMPLETE_DATA,
+                optimizer={"status": "NOT_RUN", "message": f"Pipeline stopped: {evidence_st}."},
+                ppo={"available": False, "reason": "Pipeline stopped on data quality failure."},
+                evidence_status=evidence_st,
                 disagreement=False,
-                data_issues=problems,
+                data_issues=quality_issues,
             ),
             "quantitative_evidence": {},
             "comparison": {},
@@ -832,10 +853,51 @@ def generate_recommendation(
         "data_label": "SYNTHETIC_DATA_TESTBED",
     }
 
+    # Predictive train regulation calculations (Feature 1)
+    decision_urgency = compute_decision_urgency(state, conflicts)
+    multi_horizon = compute_multi_horizon_projections(state, horizons=(30, 60, 90))
+    train_trends = {t["id"]: classify_delay_trend(t, state) for t in state.get("trains", [])}
+    developing_delays = detect_developing_delays(state, horizon_min=90)
+    propagation_graph = build_delay_propagation_graph(state, horizon_min=90)
+
+    primary_train_id = None
+    if selected and selected.get("candidate", {}).get("action", {}).get("train_id"):
+        primary_train_id = selected["candidate"]["action"]["train_id"]
+    elif actionable_conflicts and actionable_conflicts[0].get("trains"):
+        primary_train_id = actionable_conflicts[0]["trains"][0]
+    elif state.get("trains"):
+        primary_train_id = state["trains"][0]["id"]
+
+    knock_on = compute_knock_on_propagation(state, primary_train_id or "", horizon_min=90)
+    best_alt = next(
+        (item for item in evaluations if item["eligible"] and (not selected or item["candidate"]["id"] != selected["candidate"]["id"])),
+        None,
+    )
+    timeline = compute_comparative_timeline(
+        state,
+        recommended_action=selected["candidate"] if selected else None,
+        alternative_action=best_alt["candidate"] if best_alt else None,
+        horizon_min=90,
+    )
+    confidence_disclosure = get_confidence_disclosure(is_calibrated=False)
+
     return {
         **base,
         "evidence_status": evidence_status,
         "data_freshness": data_freshness,
+        "data_quality": data_quality,
+        "confidence_disclosure": confidence_disclosure,
+        "structured_evidence": explanation.get("structured_evidence"),
+        "comparison_matrix": explanation.get("comparison_matrix"),
+        "predictive_regulation": {
+            "decision_urgency": decision_urgency,
+            "multi_horizon_projections": multi_horizon,
+            "train_delay_trends": train_trends,
+            "developing_delays": developing_delays,
+            "propagation_graph": propagation_graph,
+            "knock_on_propagation": knock_on,
+            "comparative_timeline": timeline,
+        },
         "conflicts": conflicts,
         "primary_conflicts": primary_conflicts(conflicts),
         "recommended": recommended_payload,
@@ -870,7 +932,7 @@ def generate_recommendation(
             "human_in_control": True,
             "recommendation_is_not_a_decision": True,
             "requires_confirmation": True,
-            "authorized_roles": ["SECTION_MASTER"],
+            "authorized_roles": ["SECTION_CONTROLLER", "SECTION_MASTER", "STATION_MASTER", "ADMIN"],
             "recorded_separately": True,
             "allowed_decisions": [
                 "APPROVE",

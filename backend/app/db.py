@@ -47,6 +47,38 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
+        # Schema migration check for SQLite
+        if engine.url.drivername.startswith("sqlite"):
+            res = conn.execute(text("PRAGMA table_info(users)"))
+            cols = {row[1] for row in res.fetchall()}
+            if cols:
+                if "zone" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN zone VARCHAR NOT NULL DEFAULT 'SWR'"))
+                if "division" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN division VARCHAR NOT NULL DEFAULT 'Southern Division'"))
+                if "control_area" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN control_area VARCHAR"))
+                if "assigned_stations" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN assigned_stations JSON"))
+                if "assigned_sections" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN assigned_sections JSON"))
+                if "active" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN active BOOLEAN NOT NULL DEFAULT 1"))
+                if "token_version" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1"))
+                if "last_login_at" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN last_login_at DATETIME"))
+                if "password_changed_at" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN password_changed_at DATETIME"))
+
+            res_dec = conn.execute(text("PRAGMA table_info(decisions)"))
+            dec_cols = {row[1] for row in res_dec.fetchall()}
+            if dec_cols:
+                if "data_quality" not in dec_cols:
+                    conn.execute(text("ALTER TABLE decisions ADD COLUMN data_quality JSON"))
+                if "three_way_comparison" not in dec_cols:
+                    conn.execute(text("ALTER TABLE decisions ADD COLUMN three_way_comparison JSON"))
+
         conn.execute(
             text(
                 """

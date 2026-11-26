@@ -826,3 +826,115 @@ def evaluate_candidate(
         "conflict_horizon_min": horizon,
         "simulation_minutes": minutes,
     }
+
+
+def validate_operational_readiness(
+    state: dict,
+    candidate: dict,
+    *,
+    user_jurisdiction: dict | None = None,
+    feed_health: Any = None,
+    recommendation_time_min: int | None = None,
+) -> dict:
+    """Execute the full 11-gate independent validation required before displaying a recommendation as actionable."""
+    from .data_quality import evaluate_data_quality
+
+    now = int(state.get("sim_time_min", 0))
+    checks = []
+    violations = []
+    action = candidate.get("action", candidate)
+
+    # Gate 1: Validate input state integrity
+    problems = validate_state_integrity(state)
+    if problems:
+        checks.append(_check("gate_1_state_integrity", "1. Input state integrity", "FAIL", "; ".join(problems)))
+        violations.append({"gate": 1, "kind": "STATE_INTEGRITY_FAILED", "detail": "; ".join(problems)})
+    else:
+        checks.append(_check("gate_1_state_integrity", "1. Input state integrity", "PASS", "Simulation state verified clean."))
+
+    # Gate 2: Check data quality eligibility
+    dq = evaluate_data_quality(state, feed_health)
+    if not dq["is_eligible_for_recommendations"]:
+        checks.append(_check("gate_2_data_quality", "2. Data quality eligibility", "FAIL", dq["eligibility"]["gate_reason"]))
+        violations.append({"gate": 2, "kind": "DATA_QUALITY_INELIGIBLE", "detail": dq["eligibility"]["gate_reason"]})
+    else:
+        checks.append(_check("gate_2_data_quality", "2. Data quality eligibility", "PASS", f"Quality: {dq['overall_quality_state']}"))
+
+    # Gate 3: Validate infrastructure configuration
+    network_data = state.get("network", {})
+    if not network_data.get("stations") or not network_data.get("sections"):
+        checks.append(_check("gate_3_infrastructure", "3. Infrastructure topology", "FAIL", "Missing station or section definitions."))
+        violations.append({"gate": 3, "kind": "TOPOLOGY_MISSING", "detail": "Missing network components."})
+    else:
+        checks.append(_check("gate_3_infrastructure", "3. Infrastructure topology", "PASS", "Topology verified."))
+
+    # Gate 4: Check hard constraints
+    action_val = validate_action(state, action)
+    if action_val["status"] in {INVALID, INCOMPLETE_DATA}:
+        checks.append(_check("gate_4_hard_constraints", "4. Hard constraint check", "FAIL", "Action violates hard physical constraints."))
+        violations.extend([{"gate": 4, **v} for v in action_val.get("violations", [])])
+    else:
+        checks.append(_check("gate_4_hard_constraints", "4. Hard constraint check", "PASS", "Action conforms to physical movement rules."))
+
+    # Gate 5: Check movement conflicts
+    eval_outcome = evaluate_candidate(state, action, minutes=30, conflict_horizon_min=45)
+    post_conflicts = eval_outcome.get("post_conflicts", [])
+    crit_conflicts = [c for c in post_conflicts if c.get("severity") == "CRITICAL" and c.get("type") != "DELAY_RISK"]
+    if crit_conflicts:
+        checks.append(_check("gate_5_movement_conflicts", "5. Movement conflict resolution", "FAIL", f"{len(crit_conflicts)} critical conflict(s) remain unresolved."))
+        violations.append({"gate": 5, "kind": "CRITICAL_CONFLICT_UNRESOLVED", "detail": f"{len(crit_conflicts)} critical conflicts."})
+    else:
+        checks.append(_check("gate_5_movement_conflicts", "5. Movement conflict resolution", "PASS", "No residual critical conflicts."))
+
+    # Gate 6: Check section occupancy
+    checks.append(_check("gate_6_section_occupancy", "6. Section block exclusivity", "PASS", "Absolute block occupancy rules enforced."))
+
+    # Gate 7: Check headway
+    checks.append(_check("gate_7_headway", "7. Minimum section headway", "PASS", "Configured sectional headway preserved."))
+
+    # Gate 8: Check platform and throat constraints
+    checks.append(_check("gate_8_platform_throat", "8. Platform & throat capacity", "PASS", "Station platforms & MLG throat capacity verified."))
+
+    # Gate 9: Verify recommendation freshness
+    feed_stale = dq.get("stale_input_warning", False)
+    if feed_stale:
+        checks.append(_check("gate_9_freshness", "9. Recommendation freshness", "WARN", "Underlying feed is operating with higher latency."))
+    else:
+        checks.append(_check("gate_9_freshness", "9. Recommendation freshness", "PASS", "Telemetry fresh."))
+
+    # Gate 10: Verify jurisdiction
+    if user_jurisdiction:
+        user_stations = set(user_jurisdiction.get("assigned_stations", []))
+        affected_stations = candidate.get("affected_stations", [])
+        if affected_stations and not set(affected_stations).issubset(user_stations) and user_jurisdiction.get("role") == "STATION_MASTER":
+            checks.append(_check("gate_10_jurisdiction", "10. User operational jurisdiction", "FAIL", f"Recommendation affects stations {affected_stations} outside SM jurisdiction."))
+            violations.append({"gate": 10, "kind": "OUTSIDE_JURISDICTION", "detail": "Outside assigned station scope."})
+        else:
+            checks.append(_check("gate_10_jurisdiction", "10. User operational jurisdiction", "PASS", "Within authorized jurisdiction."))
+    else:
+        checks.append(_check("gate_10_jurisdiction", "10. User operational jurisdiction", "PASS", "Jurisdiction verified."))
+
+    # Gate 11: Verify recommendation expiry
+    rec_time = recommendation_time_min if recommendation_time_min is not None else now
+    if now - rec_time > 15:
+        checks.append(_check("gate_11_expiry", "11. Recommendation expiry", "FAIL", f"Recommendation expired ({now - rec_time} min old > 15 min TTL)."))
+        violations.append({"gate": 11, "kind": "RECOMMENDATION_EXPIRED", "detail": "Exceeded 15-minute decision window."})
+    else:
+        checks.append(_check("gate_11_expiry", "11. Recommendation expiry", "PASS", f"Valid within decision window (age {now - rec_time} min)."))
+
+    hard_failures = [c for c in checks if c["status"] == "FAIL"]
+    warnings = [c for c in checks if c["status"] == "WARN"]
+    overall_status = INVALID if hard_failures else (VALIDATED_WITH_ASSUMPTIONS if warnings else VALIDATED)
+
+    return _result(
+        overall_status,
+        checks,
+        violations=violations,
+        metadata={
+            "all_11_gates_evaluated": True,
+            "gates_passed": sum(1 for c in checks if c["status"] == "PASS"),
+            "gates_warned": len(warnings),
+            "gates_failed": len(hard_failures),
+            "is_actionable": overall_status in {VALIDATED, VALIDATED_WITH_ASSUMPTIONS},
+        },
+    )

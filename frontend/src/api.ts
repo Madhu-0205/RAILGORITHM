@@ -18,6 +18,17 @@ import type {
   FeedHealthMetrics,
   SectionControllerKpis,
   StationMasterKpis,
+  StationMasterOverview,
+  StationMasterLayout,
+  StationMasterMovementBoard,
+  StationMasterAdjacentStations,
+  StationMasterAlerts,
+  SectionControllerOverview,
+  SectionControllerTopology,
+  SectionControllerTrainLedger,
+  SectionControllerBlockBoard,
+  SectionControllerJunctionWorkspace,
+  SectionControllerAlerts,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -70,10 +81,25 @@ async function request<T>(
 }
 
 export const api = {
-  login(username: string, password: string) {
-    return request<LoginResponse>("/auth/login", {
+  login(username: string, password: string, portal?: string) {
+    const path =
+      portal === "STATION_MASTER"
+        ? "/auth/login/station-master"
+        : portal === "SECTION_CONTROLLER"
+        ? "/auth/login/section-controller"
+        : "/auth/login";
+    return request<LoginResponse>(path, {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, portal }),
+    });
+  },
+  logout() {
+    return request<{ status: string }>("/auth/logout", { method: "POST" });
+  },
+  changePassword(old_password: string, new_password: string) {
+    return request<{ status: string; message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ old_password, new_password }),
     });
   },
   me() {
@@ -153,6 +179,8 @@ export const api = {
       rationale: string;
       confirm_apply: boolean;
       modifications?: Record<string, unknown> | null;
+      feedback_category?: string | null;
+      structured_rationale_tag?: string | null;
     },
   ) {
     return request<{
@@ -165,6 +193,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+  decisionAnalytics(simulationId?: string) {
+    const qs = simulationId ? `?simulation_id=${encodeURIComponent(simulationId)}` : "";
+    return request<{
+      total_decisions: number;
+      acceptance_rate_pct: number;
+      by_action_type: Record<string, number>;
+      by_feedback_category: Record<string, number>;
+      by_rationale_tag: Record<string, number>;
+      modification_patterns: { total_modified: number; average_hold_adjustment_min: number };
+      outcome_accuracy: {
+        evaluated_count: number;
+        mean_delay_error_min: number;
+        resolution_success_rate_pct: number;
+      };
+    }>(`/recommendations/review/analytics${qs}`);
+  },
+  decisionDataset(simulationId?: string) {
+    const qs = simulationId ? `?simulation_id=${encodeURIComponent(simulationId)}` : "";
+    return request<Array<Record<string, unknown>>>(`/recommendations/review/dataset${qs}`);
   },
   advance(id: string, minutes: number) {
     return request<SimulationView>(`/simulations/${id}/advance`, {
@@ -264,5 +312,50 @@ export const api = {
     return request<{ success: boolean; status: string }>(`/ingestion/feeds/${feedId}/reconnect`, {
       method: "POST",
     });
+  },
+
+  // Role-Separated Operations: Station Master
+  stationMasterOverview(simId: string, stationId?: string) {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    return request<StationMasterOverview>(`/simulations/${simId}/station-master/overview${query}`);
+  },
+  stationMasterLayout(simId: string, stationId?: string) {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    return request<StationMasterLayout>(`/simulations/${simId}/station-master/layout${query}`);
+  },
+  stationMasterMovementBoard(simId: string, stationId?: string, windowAheadMin?: number) {
+    const params = new URLSearchParams();
+    if (stationId) params.append("station_id", stationId);
+    if (windowAheadMin) params.append("window_ahead_min", String(windowAheadMin));
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<StationMasterMovementBoard>(`/simulations/${simId}/station-master/movement-board${qs}`);
+  },
+  stationMasterAdjacentStations(simId: string, stationId?: string) {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    return request<StationMasterAdjacentStations>(`/simulations/${simId}/station-master/adjacent-stations${query}`);
+  },
+  stationMasterAlerts(simId: string, stationId?: string) {
+    const query = stationId ? `?station_id=${stationId}` : "";
+    return request<StationMasterAlerts>(`/simulations/${simId}/station-master/alerts${query}`);
+  },
+
+  // Role-Separated Operations: Section Controller
+  sectionControllerOverview(simId: string) {
+    return request<SectionControllerOverview>(`/simulations/${simId}/section-controller/overview`);
+  },
+  sectionControllerTopology(simId: string) {
+    return request<SectionControllerTopology>(`/simulations/${simId}/section-controller/topology`);
+  },
+  sectionControllerTrainLedger(simId: string) {
+    return request<SectionControllerTrainLedger>(`/simulations/${simId}/section-controller/train-ledger`);
+  },
+  sectionControllerBlockBoard(simId: string) {
+    return request<SectionControllerBlockBoard>(`/simulations/${simId}/section-controller/block-board`);
+  },
+  sectionControllerJunctionWorkspace(simId: string) {
+    return request<SectionControllerJunctionWorkspace>(`/simulations/${simId}/section-controller/junction-workspace`);
+  },
+  sectionControllerAlerts(simId: string) {
+    return request<SectionControllerAlerts>(`/simulations/${simId}/section-controller/alerts`);
   },
 };
